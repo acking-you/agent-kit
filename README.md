@@ -14,7 +14,10 @@ Run `./install.sh help` for more options.
 
 ## Featured Skills
 
+- `workbuddy-subagent`: Delegate resumable tasks to WorkBuddy's bundled CLI. Routes frontend design, writing, and brainstorming to the newest available Opus; correctness review and execution to Astra. Includes runtime/model discovery and strict result validation. See its compatibility notes before relying on desktop login or background execution.
 - `codex-session-history`: Search local Codex sessions by session id, provider, time range, preview text, thread name, or archived status. Includes the bundled `scripts/codex_session_history.py` CLI.
+
+For Codex, install `skills/workbuddy-subagent` into `$CODEX_HOME/skills/workbuddy-subagent` (normally `~/.codex/skills/workbuddy-subagent`). The repository's `install.sh` targets Claude Code instead.
 
 ## Structure
 
@@ -37,5 +40,6 @@ Run `./install.sh help` for more options.
     ├── research/           # Technical research with citations
     ├── tech-blog/          # Technical blog post generation
     ├── tech-design-doc/    # Technical design doc generation
-    └── tech-impl-doc/      # Technical implementation doc generation
+    ├── tech-impl-doc/      # Technical implementation doc generation
+    └── workbuddy-subagent/ # WorkBuddy CLI delegation with Opus/Astra routing
 ```
