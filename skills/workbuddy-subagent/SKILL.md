@@ -1,6 +1,6 @@
 ---
 name: workbuddy-subagent
-description: Use WorkBuddy's bundled CLI as a resumable subagent. Consult Claude/Opus for plan and architecture discussion, tradeoffs, product decisions, frontend design and writing; consult GPT/Astra for factual investigation, verification and execution of agreed plans. Use when WorkBuddy is requested, a task benefits from an external thinking partner or verifier, or a WorkBuddy session should continue.
+description: Use WorkBuddy's bundled CLI as a resumable subagent. Consult Claude for plan and architecture discussion, tradeoffs, product decisions, frontend design and writing; consult GPT for factual investigation, verification and execution of agreed plans. Use when WorkBuddy is requested, a task benefits from an external thinking partner or verifier, or a WorkBuddy session should continue.
 ---
 
 # WorkBuddy Subagent
@@ -13,81 +13,81 @@ Resolve `SKILL_DIR` to the directory containing this file. Use absolute paths fo
 
 ## Choose a model by task
 
-These are the user's practical routing preferences, not universal rankings. Neither family is infallible; code, tests and sources settle factual questions whichever model raised them.
+The stable choice is the provider family, not a model name: use the latest, most capable Claude and GPT available through WorkBuddy, even when their flagship names change. These are the user's practical routing preferences, not universal rankings. Neither family is infallible; code, tests and sources settle factual questions whichever model raised them.
 
-- **Claude, newest Opus: thinking partner.** Consult it often, not only for polish. Use it for plans, architecture, tradeoffs, product decisions, alternative approaches, subjective judgment, frontend/UI design, writing, technical blogs, narrative structure and imaginative ideas.
-- **GPT, newest Astra: investigator and executor.** Use it for factual investigation, validation, correctness checks, reproducible evidence, code review and precise execution of an agreed plan. The user finds it meticulous with facts but less helpful for subjective ideation.
+- **Latest, strongest Claude: thinking partner.** Consult it often, not only for polish. Use it for plans, architecture, tradeoffs, product decisions, alternative approaches, subjective judgment, frontend/UI design, writing, technical blogs, narrative structure and imaginative ideas.
+- **Latest, strongest GPT: investigator and executor.** Use it for factual investigation, validation, correctness checks, reproducible evidence, code review and precise execution of an agreed plan. The user finds it meticulous with facts but less helpful for subjective ideation.
 
 | Profile | Model | Use for |
 | --- | --- | --- |
-| `brainstorm` | Opus | Plan and architecture discussion, tradeoffs, product decisions, alternatives, reframing, ideation |
-| `design` | Opus | Frontend interfaces, visual hierarchy, interaction states, alternative layouts |
-| `writing` | Opus | Writing, editing, technical blogs, narrative structure, clear explanations |
-| `review` | Astra | Factual investigation, checking claims and plan premises, edge cases, invariants, code and design review |
-| `execute` (CLI default) | Astra | Precise implementation of an agreed plan, debugging, reproducible verification |
+| `brainstorm` | Claude | Plan and architecture discussion, tradeoffs, product decisions, alternatives, reframing, ideation |
+| `design` | Claude | Frontend interfaces, visual hierarchy, interaction states, alternative layouts |
+| `writing` | Claude | Writing, editing, technical blogs, narrative structure, clear explanations |
+| `review` | GPT | Factual investigation, checking claims and plan premises, edge cases, invariants, code and design review |
+| `execute` (CLI default) | GPT | Precise implementation of an agreed plan, debugging, reproducible verification |
 
-**Choose `--profile` explicitly for new tasks.** The helper defaults to `execute`, so a discussion launched without `--profile brainstorm` goes to Astra unless an explicit `--model` overrides it.
+**Choose `--profile` to describe the task, then resolve and pass `--model EXACT_ID`.** Profiles guide the parent toward Claude or GPT; the helper does not infer capability or choose a model from a profile.
 
-Consult Opus proactively at decision points: when several reasonable options exist, before committing to a nontrivial plan or architecture, when the user asks for an opinion or recommendation, or when progress has stalled. Do not delegate trivial, mechanical or already-decided work.
+Consult Claude proactively at decision points: when several reasonable options exist, before committing to a nontrivial plan or architecture, when the user asks for an opinion or recommendation, or when progress has stalled. Do not delegate trivial, mechanical or already-decided work.
 
 | Scenario | Route |
 | --- | --- |
-| "Queue or cron for this sync job?" / "How should we split this module?" | `brainstorm` (Opus); keep read-only tools if it must inspect the repo |
-| "Which onboarding flow should ship first?" | `brainstorm` (Opus) |
-| "Redesign this settings page" / "Draft a blog post on this release" | `design` / `writing` (Opus) |
-| "Does this library really retry on 429? Show me where." | `review` (Astra), read-only tools |
-| "Is this migration plan safe for our schema?" | Opus proposes or critiques the plan, then Astra checks its premises with `review` |
-| "Implement the approved plan in this checkout" | `execute` (Astra) |
+| "Queue or cron for this sync job?" / "How should we split this module?" | `brainstorm` (Claude); keep read-only tools if it must inspect the repo |
+| "Which onboarding flow should ship first?" | `brainstorm` (Claude) |
+| "Redesign this settings page" / "Draft a blog post on this release" | `design` / `writing` (Claude) |
+| "Does this library really retry on 429? Show me where." | `review` (GPT), read-only tools |
+| "Is this migration plan safe for our schema?" | Claude proposes or critiques the plan, then GPT checks its premises with `review` |
+| "Implement the approved plan in this checkout" | `execute` (GPT) |
 
 ### Mixed work
 
-1. Opus produces an opinionated proposal: a recommendation, credible alternatives, tradeoffs, assumptions, and what would change its mind.
-2. The parent extracts the **falsifiable premises** (API behavior, constraints, compatibility, performance, edge cases, feasibility) and asks Astra to test them with `review`.
+1. Claude produces an opinionated proposal: a recommendation, credible alternatives, tradeoffs, assumptions, and what would change its mind.
+2. The parent extracts the **falsifiable premises** (API behavior, constraints, compatibility, performance, edge cases, feasibility) and asks GPT to test them with `review`.
 3. Keep two outcomes separate. **Falsifiable errors** are settled by evidence, not by which model asserted them. **Subjective disagreements** (taste, priorities, risk appetite) are reported as tradeoffs for the parent or user to decide.
-4. Resume Opus with verified facts or user feedback when they affect the recommendation or clarify a tradeoff. Do not force both models onto every task.
+4. Resume Claude with verified facts or user feedback when they affect the recommendation or clarify a tradeoff. Do not force both models onto every task.
 
-### Explicit choices and exact IDs
+### Resolve the current flagship
 
-An explicit user model choice always wins. "Claude" or "Opus" maps to `--model claude` (newest Opus). "GPT" or "Astra" maps to `--model gpt` (newest Astra). A named model such as Sonnet, Sol or a `-1m` variant needs its exact catalog ID in `--model EXACT_ID`. Family-level preferences never authorize a different tier: automatic selection only picks Opus or Astra.
-
-On resume, always pass the exact model ID recorded for the previous turn. The packaged CLI can reset to `auto` when `--model` is omitted, so the helper rejects that ambiguity. Change the ID only when deliberately switching models. To obtain an independent opinion, create a separate session.
-
-Discover the current catalog before starting work:
+Before a new delegated task, inspect WorkBuddy's catalog and current official model guidance. Select the latest, highest-capability general-purpose model from the chosen provider that WorkBuddy exposes, including any newly named flagship. Favor capability over price or speed; a newer date, larger version number, longer context or familiar suffix does not establish stronger capability.
 
 ```bash
 python3 "$SKILL_DIR/scripts/workbuddy.py" doctor
 python3 "$SKILL_DIR/scripts/workbuddy.py" models --cwd /absolute/task/workspace
 ```
 
-The helper selects the highest numeric version **within the requested flagship family**. `gpt-6.1-sol` does not outrank `gpt-6-astra` just because its minor version is newer. Current verified catalog IDs include `gpt-6-astra` and `claude-opus-5.5`; never substitute Anthropic's API spelling `claude-opus-5-5` for WorkBuddy's ID. Missing families fail explicitly; do not silently use `auto`, Sol, Luna, Sonnet, or Haiku.
+The parent agent resolves the model using official sources and the catalog; the Python helper only validates and invokes the exact ID. It does not scrape model rankings, rank IDs, or map `claude`/`gpt` aliases to permanent brands. Pass `--model EXACT_ID` on every call. Record the ID, check date and selection evidence in task notes. Reuse that decision within the same task; recheck for a new task or changed catalog/vendor guidance. See [model policy](references/model-policy.md) for source links and selection details.
 
-For a request about the latest or strongest model, check official vendor model pages as well as the local catalog. Catalog presence establishes a routing ID, not successful inference access or comparative quality. New flagship family names require an explicit routing decision; see [model policy](references/model-policy.md).
+An explicit user model choice always wins. A generic request for Claude or GPT means the current strongest model from that provider, not a permanent Opus/Astra tier. If the user names a specific model or tier, resolve that request instead. Report any gap between the vendor's flagship and WorkBuddy availability; do not disguise a cheaper, older or fallback model as the latest strongest. Catalog presence is not proof of successful inference.
+
+Current tested WorkBuddy IDs are `claude-opus-5.5` and `gpt-6-astra` (2026-10-09). These are dated examples, not permanent defaults or a ranking of every model released by the vendors. Set `CLAUDE_MODEL` and `GPT_MODEL` in the examples below to the exact IDs resolved for the current task; do not blindly copy these historical IDs.
+
+On resume, pass the exact model ID recorded for that conversation unless intentionally switching. The packaged CLI can reset to `auto` when `--model` is omitted. A new flagship does not silently change an ongoing conversation. To obtain an independent opinion, create a separate session.
 
 ## Delegate a bounded task
 
-Write a UTF-8 prompt file with: objective, relevant context, allowed workspace/files, acceptance criteria, and requested output. External sessions do not inherit the parent chat. Include relevant repository instructions and any user constraints. Ask for findings, assumptions, evidence, and unresolved questions; do not request hidden reasoning. For decisions, ask Opus for a recommendation and tradeoffs; for open exploration, invite alternatives and reframing. Ask Astra for evidence (paths and lines, commands, sources), a verdict per claim, and explicit "undetermined" items. Brief templates are in [model policy](references/model-policy.md#example-briefs).
+Write a UTF-8 prompt file with: objective, relevant context, allowed workspace/files, acceptance criteria, and requested output. External sessions do not inherit the parent chat. Include relevant repository instructions and any user constraints. Ask for findings, assumptions, evidence, and unresolved questions; do not request hidden reasoning. For decisions, ask Claude for a recommendation and tradeoffs; for open exploration, invite alternatives and reframing. Ask GPT for evidence (paths and lines, commands, sources), a verdict per claim, and explicit "undetermined" items. Brief templates are in [model policy](references/model-policy.md#example-briefs).
 
-For a self-contained discussion or supplied-text review, disable tools. If Opus must inspect the repository to discuss its architecture, omit `--tools` to keep the read-only default.
+For a self-contained discussion or supplied-text review, disable tools. If Claude must inspect the repository to discuss its architecture, omit `--tools` to keep the read-only default.
 
 ```bash
 python3 "$SKILL_DIR/scripts/workbuddy.py" run \
-  --cwd /absolute/task/workspace --profile brainstorm --tools '' \
-  --prompt-file /absolute/task/brief.txt --output /absolute/task/opus-turn-1.jsonl
+  --cwd /absolute/task/workspace --profile brainstorm --model "$CLAUDE_MODEL" --tools '' \
+  --prompt-file /absolute/task/brief.txt --output /absolute/task/claude-turn-1.jsonl
 ```
 
 For read-only source review or factual investigation, omit `--tools`: the default is `Read,Glob,Grep`, with `plan` permission mode.
 
 ```bash
 python3 "$SKILL_DIR/scripts/workbuddy.py" run \
-  --cwd /absolute/project --profile review \
-  --prompt-file /absolute/task/facts.txt --output /absolute/task/astra-facts.jsonl
+  --cwd /absolute/project --profile review --model "$GPT_MODEL" \
+  --prompt-file /absolute/task/facts.txt --output /absolute/task/gpt-facts.jsonl
 ```
 
 For authorized edits, preferably use an isolated checkout. Enable only the necessary tools:
 
 ```bash
 python3 "$SKILL_DIR/scripts/workbuddy.py" run \
-  --cwd /absolute/isolated/checkout --profile execute \
+  --cwd /absolute/isolated/checkout --profile execute --model "$GPT_MODEL" \
   --permission-mode acceptEdits --tools Read,Glob,Grep,Edit,Write \
   --prompt-file /absolute/task/implementation.txt --output /absolute/task/implementation.jsonl
 ```
@@ -101,11 +101,11 @@ Record the printed `session_id`, chosen model, absolute workspace, output path, 
 ```bash
 python3 "$SKILL_DIR/scripts/workbuddy.py" run \
   --cwd /absolute/task/workspace --resume SESSION_ID --tools '' \
-  --model gpt-6-astra \
+  --model "$SESSION_MODEL" \
   --prompt-file /absolute/task/follow-up.txt --output /absolute/task/turn-2.jsonl
 ```
 
-Replace `gpt-6-astra` with that session's recorded model ID. Use a new output path each turn. Never use the ambiguous CLI `--continue` when several tasks exist. Never send overlapping turns to the same session. Keep workspace and tool permissions explicit on every turn.
+Set `SESSION_MODEL` to that session's recorded exact model ID. Use a new output path each turn. Never use the ambiguous CLI `--continue` when several tasks exist. Never send overlapping turns to the same session. Keep workspace and tool permissions explicit on every turn.
 
 For sustained work, start `run` through the host's persistent execution-session tool, yield promptly, and retain its handle. `--timeout 0` (default) permits a long model turn; `--max-turns` defaults to 20 and may be increased for a scoped task. This does not make the model run forever or resume automatically after an app/machine restart.
 

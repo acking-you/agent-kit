@@ -53,6 +53,8 @@ Two integration issues were reproduced and handled:
 1. Before native bootstrap, both print-mode inference and an ACP prompt failed with `Authentication required` while the desktop worked. Supplying WorkBuddy's native credential initialization resolved actual inference; repeated desktop login was unnecessary.
 2. Native `--resume` without `--model` recalled history but reported `auto` instead of the previous Astra model. The helper now requires an exact model ID on resume and rejects successful outputs whose reported model does not match the request.
 
+Model selection is now resolved by the parent from current vendor guidance and the WorkBuddy catalog. `run` requires an exact `--model` on new tasks as well as resumes; the earlier `claude`, `gpt` and `frontier` aliases no longer guess a permanent Opus/Astra tier. `models` returns an unranked catalog without a guessed default.
+
 The stream's initial `tools` list describes the registered inventory, not the effective `--tools` filter. The installed source applies that filter when enabling tools. Inspect actual tool-use events when validating behavior.
 
 During initial diagnostics, `--bg` acknowledged a launch but produced an empty log; `agents --jobs` reported `No mapping found: POST /internal/agents`. Without the headless override, that command also tried to load the omitted full CLI bundle. Native background jobs remain unverified; the validated workflow uses host execution sessions and explicit CLI resumption. Do not reuse these results as proof for a newer WorkBuddy build.

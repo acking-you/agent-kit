@@ -1,6 +1,8 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -11,39 +13,37 @@ spec.loader.exec_module(wb)
 
 
 class WorkBuddyTests(unittest.TestCase):
-    def test_flagship_tier_beats_minor_version(self):
-        self.assertEqual(wb.select_model(["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"], "gpt"), "gpt-6-astra")
+    def test_verified_choice_beats_numeric_sort(self):
+        self.assertEqual(wb.select_model(["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"], "gpt-6-astra"), "gpt-6-astra")
 
-    def test_newer_version_within_opus_family(self):
-        self.assertEqual(wb.select_model(["claude-opus-5", "claude-opus-5.5", "claude-sonnet-6"], "claude"), "claude-opus-5.5")
+    def test_renamed_claude_flagship_is_supported(self):
+        self.assertEqual(wb.select_model(["claude-opus-99", "claude-new-flagship"], "claude-new-flagship"), "claude-new-flagship")
 
-    def test_future_numeric_version(self):
-        self.assertEqual(wb.select_model(["gpt-6-astra", "gpt-10-astra"], "gpt"), "gpt-10-astra")
+    def test_renamed_gpt_flagship_is_supported(self):
+        self.assertEqual(wb.select_model(["gpt-99-astra", "gpt-new-flagship"], "gpt-new-flagship"), "gpt-new-flagship")
 
     def test_exact_model_override(self):
         self.assertEqual(wb.select_model(["gpt-6-astra", "claude-opus-5.5"], "claude-opus-5.5"), "claude-opus-5.5")
 
     def test_no_silent_downgrade(self):
         with self.assertRaises(wb.WorkBuddyError):
-            wb.select_model(["auto", "gpt-6.1-sol", "claude-opus-5.5"], "gpt")
+            wb.select_model(["auto", "gpt-6.1-sol", "claude-opus-5.5"], "gpt-6-astra")
 
     def test_missing_explicit_model_fails(self):
         with self.assertRaises(wb.WorkBuddyError):
             wb.select_model(["claude-opus-5.5"], "claude-opus-5-5")
 
-    def test_resume_requires_exact_model(self):
-        for model in (None, "gpt", "claude", "frontier"):
+    def test_ambiguous_model_requests_are_rejected(self):
+        for model in (None, "gpt", "claude", "frontier", "auto"):
             with self.assertRaises(wb.WorkBuddyError):
-                wb.requested_model("execute", model, "existing-session")
+                wb.select_model(["claude-opus-5.5", "gpt-6-astra", "auto"], model)
 
-    def test_resume_keeps_explicit_model_over_profile(self):
-        self.assertEqual(wb.requested_model("writing", "gpt-6-astra", "existing-session"), "gpt-6-astra")
-
-    def test_task_profiles_route_to_preferred_families(self):
-        for profile in ("design", "writing", "brainstorm"):
-            self.assertEqual(wb.requested_model(profile, None, None), "claude")
-        for profile in ("review", "execute"):
-            self.assertEqual(wb.requested_model(profile, None, None), "gpt")
+    def test_cli_requires_exact_model_for_new_and_resumed_tasks(self):
+        for extra in ([], ["--resume", "existing-session"]):
+            result = subprocess.run([sys.executable, str(SCRIPT), "run", "--cwd", "/tmp",
+                                     "--prompt-file", "unused.txt"] + extra, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("--model", result.stderr)
 
     def test_reported_auto_model_is_not_requested_astra(self):
         raw = json.dumps(dict(type="result", subtype="success", is_error=False,

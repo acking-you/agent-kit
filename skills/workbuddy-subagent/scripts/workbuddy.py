@@ -131,30 +131,13 @@ def catalog(command, env, cwd, timeout=45):
 
 
 def select_model(ids, requested):
-    if requested not in ("frontier", "gpt", "claude"):
-        if requested not in ids:
-            raise WorkBuddyError(f"Requested model is absent from the local catalog: {requested}")
-        return requested
-    # Tier first: 6.1 Sol must not displace 6 Astra merely because its minor is newer.
-    patterns = {"gpt": r"gpt-(\d+(?:\.\d+)*?)-astra(?:-.*)?$",
-                "claude": r"claude-opus-(\d+(?:\.\d+)*)(?:-.*)?$"}
-    families = ("gpt", "claude") if requested == "frontier" else (requested,)
-    for family in families:
-        candidates = []
-        for ident in ids:
-            match = re.fullmatch(patterns[family], ident)
-            if match:
-                version = tuple(int(n) for n in match[1].split("."))
-                candidates.append((version, not ident.endswith("-1m"), ident))
-        if candidates:
-            return max(candidates)[2]
-    raise WorkBuddyError("No preferred flagship found. Inspect models and explicitly choose a model; no automatic downgrade.")
-
-
-def requested_model(profile, override, resume):
-    if resume and (not override or override in ("frontier", "gpt", "claude")):
-        raise WorkBuddyError("Resume requires --model EXACT_ID from the previous turn; this CLI otherwise resets to auto.")
-    return override or ("claude" if profile in ("design", "writing", "brainstorm") else "gpt")
+    # Capability cannot be inferred from a permanent brand suffix or version sort.
+    # The parent resolves the current provider flagship using docs + this catalog.
+    if not requested or requested in ("frontier", "gpt", "claude", "auto"):
+        raise WorkBuddyError("Pass --model EXACT_ID after checking current vendor guidance and the WorkBuddy catalog; family aliases do not identify the strongest model.")
+    if requested not in ids:
+        raise WorkBuddyError(f"Requested model is absent from the local catalog: {requested}")
+    return requested
 
 
 def json_values(text):
@@ -262,9 +245,9 @@ def main():
     run = sub.add_parser("run")
     run.add_argument("--cwd", required=True)
     run.add_argument("--prompt-file", required=True, help="UTF-8 file; '-' reads stdin")
-    run.add_argument("--model", help="gpt, claude, frontier, or exact WorkBuddy ID; overrides profile")
+    run.add_argument("--model", required=True, help="Exact WorkBuddy ID resolved from current vendor guidance and catalog; required on every turn")
     run.add_argument("--profile", choices=["review", "execute", "design", "writing", "brainstorm"],
-                     default="execute", help="Task routing: design/writing/brainstorm use Opus; review/execute use Astra")
+                     default="execute", help="Task intent: design/writing/brainstorm prefer Claude; review/execute prefer GPT. --model controls execution.")
     run.add_argument("--resume", help="Explicit session ID; never use ambiguous --continue")
     run.add_argument("--permission-mode", choices=["plan", "dontAsk", "acceptEdits"], default="plan")
     run.add_argument("--tools", default="Read,Glob,Grep", help="Empty disables tools; default is read-only")
@@ -292,16 +275,15 @@ def main():
     cwd = Path(args.cwd).expanduser().resolve(strict=True)
     if args.command == "models":
         ids = catalog(command, env, cwd)
-        emit({"models": ids, "default": select_model(ids, "frontier"),
-              "note": "Catalog presence does not verify inference access. No model prompt was sent."})
+        emit({"models": ids,
+              "note": "This catalog is unranked. Resolve the current strongest Claude/GPT using vendor guidance, then pass its exact ID. Catalog presence does not verify inference access."})
         return 0
     prompt = sys.stdin.read() if args.prompt_file == "-" else Path(args.prompt_file).read_text()
     if not prompt.strip() or args.max_turns < 1 or args.timeout < 0:
         raise WorkBuddyError("Provide a nonempty prompt, a positive turn limit and a nonnegative timeout.")
     if args.output and Path(args.output).exists():
         raise WorkBuddyError("Output already exists; choose a new path before starting this task.")
-    requested = requested_model(args.profile, args.model, args.resume)
-    model = select_model(catalog(command, env, cwd), requested)
+    model = select_model(catalog(command, env, cwd), args.model)
     session = args.resume or str(uuid.uuid4())
     flags = ["-p", "--output-format", "stream-json", "--verbose",
              "--permission-mode", args.permission_mode, "--tools", args.tools,
