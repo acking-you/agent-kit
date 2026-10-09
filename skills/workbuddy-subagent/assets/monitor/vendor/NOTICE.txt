@@ -1,0 +1,8 @@
+Locally bundled browser dependencies (no CDN or runtime package install):
+
+marked 18.1.0 — MIT — https://github.com/markedjs/marked
+DOMPurify 3.4.16 — Apache-2.0 OR MPL-2.0 — https://github.com/cure53/DOMPurify
+
+JavaScript copied unmodified from the matching npm packages. License texts are included.
+marked.js: sha256 f424dcb508fdf93e0137a970cfce8f3207ea2e3f37eca5f7556a52875683632a
+purify.js: sha256 2c90a9b46d6463f26038a29b686e82bc91de01fdac9d5229e7cfe3b360134ea2

@@ -207,8 +207,10 @@ class Projection:
             data["path"] = str(args.get("file_path", args.get("path", "")))
             name = str(block.get("name", "")).lower()
             if name == "edit" and isinstance(args.get("old_string"), str) and isinstance(args.get("new_string"), str):
+                data["diff_format"] = "unified"
                 data["diff"] = clipped("\n".join(difflib.unified_diff(args["old_string"].splitlines(), args["new_string"].splitlines(), fromfile="before", tofile="after", lineterm="")))
             elif name == "write" and isinstance(args.get("content"), str):
+                data["diff_format"] = "additions"
                 data["diff"] = clipped("\n".join("+" + line for line in args["content"].splitlines()))
         self.put(key, **data)
 
@@ -364,9 +366,12 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "runs":
             runs = [run_info(p) for p in (self.server.root / "runs").glob("*.json")]
             self.reply(sorted((r for r in runs if r.get("id")), key=lambda r: r.get("started", 0), reverse=True))
-        elif route in ("", "app.js", "preferences.js", "style.css"):
+        elif route in ("", "app.js", "preferences.js", "markdown.js", "vendor/marked.js", "vendor/purify.js", "style.css"):
             name, mime = {"": ("index.html", "text/html; charset=utf-8"), "app.js": ("app.js", "text/javascript; charset=utf-8"),
                           "preferences.js": ("preferences.js", "text/javascript; charset=utf-8"),
+                          "markdown.js": ("markdown.js", "text/javascript; charset=utf-8"),
+                          "vendor/marked.js": ("vendor/marked.js", "text/javascript; charset=utf-8"),
+                          "vendor/purify.js": ("vendor/purify.js", "text/javascript; charset=utf-8"),
                           "style.css": ("style.css", "text/css; charset=utf-8")}[route]
             self.reply((ASSETS / name).read_bytes(), mime)
         elif route.startswith("events/"):

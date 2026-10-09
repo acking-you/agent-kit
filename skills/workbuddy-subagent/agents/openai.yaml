@@ -1,6 +1,6 @@
 interface:
   display_name: "WorkBuddy Subagent"
-  short_description: "Use the strongest Claude for ideas and GPT for verification"
-  default_prompt: "Use $workbuddy-subagent to resolve the latest strongest Claude or GPT available through WorkBuddy, then discuss this task or verify its factual premises and open the live monitoring panel."
+  short_description: "Claude for ideas, GPT for verification, via WorkBuddy"
+  default_prompt: "Use $workbuddy-subagent to get the latest strongest Claude's take on this plan, then have GPT verify its factual premises."
 policy:
   allow_implicit_invocation: true

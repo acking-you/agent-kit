@@ -121,13 +121,19 @@ install_skill() {
 
     ensure_global_dir
 
-    if [[ -d "${skill_dst}" ]]; then
-        warn "Skill '${skill_name}' already exists. Overwriting..."
-        rm -rf "${skill_dst}"
+    if ! command -v rsync >/dev/null 2>&1; then
+        error "Installing skills requires rsync."
+        return 1
     fi
 
     info "Installing skill: ${skill_name}"
-    cp -r "${skill_src}" "${skill_dst}"
+    mkdir -p "${skill_dst}"
+    # Personal authorization stays local: exclude it from copying AND deletion.
+    rsync -ac --delete --exclude='/user-config.json' --exclude='__pycache__/' \
+        "${skill_src}/" "${skill_dst}/" || return 1
+    if [[ -f "${skill_dst}/user-config.json" ]]; then
+        chmod 600 "${skill_dst}/user-config.json"
+    fi
     success "Installed: ${skill_name} → ${skill_dst}"
 }
 
@@ -314,4 +320,6 @@ main() {
     esac
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

@@ -1,6 +1,6 @@
 'use strict';
 // WorkBuddy agent monitor: read-only observer for long-lived agent runs.
-// All server-provided text is rendered literally via textContent / DOM creation.
+// Replies use sanitized Markdown; tool content remains literal text.
 
 const P = window.WorkBuddyPreferences;
 const $ = id => document.getElementById(id);
@@ -286,12 +286,12 @@ function renderText(node, card) {
   if (!node.querySelector('.reply')) {
     const caption = el('div', 'card-caption');
     caption.append(icon('sparkle', 'caption-icon'), el('span', 'caption-label'), el('span', 'caption-status'));
-    node.replaceChildren(caption, el('div', 'reply'));
+    node.replaceChildren(caption, el('div', 'reply markdown'));
   }
   node.className = 'card text-card' + (card.streaming ? ' streaming' : '');
   setText(node.querySelector('.caption-label'), t('card.assistant'));
   setText(node.querySelector('.caption-status'), card.streaming ? t('card.writing') : '');
-  setText(node.querySelector('.reply'), card.text || '');
+  window.WorkBuddyMarkdown.render(node.querySelector('.reply'), card.text || '');
 }
 function toolIcon(name) {
   const n = String(name || '').toLowerCase();
@@ -319,17 +319,17 @@ function inputPreview(input) {
   } catch (_) { /* not JSON: fall through to the raw first line */ }
   return text.split('\n')[0].slice(0, 240);
 }
-function diffClass(line) {
-  if (line.startsWith('+++') || line.startsWith('---')) return 'diff-meta';
-  if (line.startsWith('+')) return 'diff-add';
-  if (line.startsWith('-')) return 'diff-remove';
-  if (line.startsWith('@@')) return 'diff-hunk';
-  return 'diff-context';
-}
-function diffStats(diff) {
-  let add = 0, del = 0;
-  for (const line of diff.split('\n')) { if (line.startsWith('+++') || line.startsWith('---')) continue; if (line.startsWith('+')) add++; else if (line.startsWith('-')) del++; }
-  return {add, del};
+function diffLines(diff, format) {
+  let inHunk = false;
+  return diff.split('\n').map((text, index) => {
+    let kind = 'diff-context';
+    if (format !== 'additions' && /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/.test(text)) {
+      inHunk = true; kind = 'diff-hunk';
+    } else if (format !== 'additions' && !inHunk && index < 2 && /^(--- |\+\+\+ )/.test(text)) kind = 'diff-meta';
+    else if (text.startsWith('+')) kind = 'diff-add';
+    else if (text.startsWith('-')) kind = 'diff-remove';
+    return {text, kind};
+  });
 }
 const IN_FLIGHT = ['', 'preparing', 'running', 'started', 'executing', 'pending', 'queued', 'in_progress'];
 function toolStateInfo(card) {
@@ -380,7 +380,9 @@ function renderTool(node, card) {
   const stats = node.querySelector('.tool-stats');
   stats.hidden = !change;
   if (change) {
-    const {add, del} = diffStats(String(card.diff));
+    const lines = diffLines(String(card.diff), card.diff_format || (card.name === 'Write' ? 'additions' : 'unified'));
+    const add = lines.filter(line => line.kind === 'diff-add').length;
+    const del = lines.filter(line => line.kind === 'diff-remove').length;
     const signature = `${add}|${del}|${lang}`;
     if (stats.dataset.signature !== signature) {
       stats.dataset.signature = signature;
@@ -397,7 +399,7 @@ function renderTool(node, card) {
 
   const section = node.querySelector('.change');
   section.hidden = !change;
-  if (change) renderChange(section, String(card.diff), phase);
+  if (change) renderChange(section, String(card.diff), phase, card.diff_format || (card.name === 'Write' ? 'additions' : 'unified'));
 
   node.querySelector('.tool-body').hidden = !open;
   const [argsHeading, argsPre] = node.querySelector('.tool-args').children;
@@ -414,7 +416,7 @@ function renderTool(node, card) {
 }
 const PHASE_TONE = {pending: 'warn', applied: 'success', failed: 'danger', incomplete: 'warn'};
 const PHASE_ICON = {pending: 'hourglass', applied: 'checkCircle', failed: 'xCircle', incomplete: 'alert'};
-function renderChange(section, diff, phase) {
+function renderChange(section, diff, phase, format) {
   const cls = `change change-${phase} tone-${PHASE_TONE[phase]}`;
   if (section.className !== cls) section.className = cls;
   const signature = `${lang}|${phase}`;
@@ -428,9 +430,9 @@ function renderChange(section, diff, phase) {
   }
   let pre = section.querySelector('.diff');
   if (!pre) { pre = el('pre', 'diff'); section.append(pre); }
-  if (diffCache.get(pre) !== diff) {
-    diffCache.set(pre, diff);
-    pre.replaceChildren(...diff.split('\n').map(line => el('span', `diff-line ${diffClass(line)}`, line)));
+  if (diffCache.get(pre) !== format + diff) {
+    diffCache.set(pre, format + diff);
+    pre.replaceChildren(...diffLines(diff, format).map(line => el('span', `diff-line ${line.kind}`, line.text)));
   }
 }
 
@@ -460,7 +462,9 @@ function renderResult() {
   if (finalResult.text && finalResult.text !== lastText) {
     const details = el('details', 'final'); details.open = finalOpen;
     details.addEventListener('toggle', () => { finalOpen = details.open; });
-    details.append(el('summary', '', t('result.finalResponse')), el('pre', '', finalResult.text)); section.append(details);
+    const reply = el('div','markdown final-reply');
+    window.WorkBuddyMarkdown.render(reply,finalResult.text);
+    details.append(el('summary', '', t('result.finalResponse')), reply); section.append(details);
   }
   const errors = asText(finalResult.errors);
   if (errors && errors !== '[]') { const box = el('div', 'result-errors'); box.append(el('h3', '', t('result.errors')), el('pre', '', errors)); section.append(box); }

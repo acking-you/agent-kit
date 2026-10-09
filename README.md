@@ -12,9 +12,11 @@ Claude Code skills and prompts collection.
 
 Run `./install.sh help` for more options.
 
+The installer requires `rsync`. Updates preserve the destination's personal `user-config.json` and never import consent from the source tree.
+
 ## Featured Skills
 
-- `workbuddy-subagent`: Delegate resumable tasks to WorkBuddy's bundled CLI. Uses the latest, strongest available Claude as a thinking partner for plans, architecture, tradeoffs and product decisions, as well as frontend design and writing. Uses the latest, strongest available GPT for factual investigation, verification, review and precise execution of agreed plans. Resolves current flagship IDs from official guidance and the WorkBuddy catalog, without locking routing to Opus/Astra names. Includes authorized native login initialization, runtime/model discovery, strict result validation, and a local live dashboard for streaming replies, tool calls, change previews and resumed turns. The responsive panel supports English/Chinese, light/dark themes, system preferences, and sanitized live activity indicators. Model replies, session recall, and file editing were verified with WorkBuddy 5.7.6; see its compatibility notes for details and background execution limits.
+- `workbuddy-subagent`: Use WorkBuddy's CLI as a resumable subagent: the latest strongest available Claude for discussion, design and writing; GPT for investigation, verification and execution. Includes authorized native login initialization and strict result/model validation. The local dashboard shows streaming Markdown replies, tool calls, change previews and resumed turns, with English/Chinese and light/dark/System preferences. Markdown dependencies are bundled; no CDN is used. Tested with WorkBuddy 5.7.6; see the skill's compatibility notes for limits.
 - `codex-session-history`: Search local Codex sessions by session id, provider, time range, preview text, thread name, or archived status. Includes the bundled `scripts/codex_session_history.py` CLI.
 
 For Codex, install `skills/workbuddy-subagent` into `$CODEX_HOME/skills/workbuddy-subagent` (normally `~/.codex/skills/workbuddy-subagent`). The repository's `install.sh` targets Claude Code instead.

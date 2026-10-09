@@ -158,6 +158,10 @@ class ServerTests(unittest.TestCase):
         with self.client.open(self.base) as response:
             html = response.read().decode()
             self.assertLess(html.index('src="preferences.js"'), html.index('href="style.css"'))
+        for asset in ('markdown.js','vendor/marked.js','vendor/purify.js'):
+            with self.client.open(self.base+asset) as response:
+                self.assertEqual(response.headers.get_content_type(),'text/javascript')
+                self.assertTrue(response.read())
 
     def test_final_append_between_log_poll_and_status_read_is_not_lost(self):
         log=self.root/'race.jsonl'; log.write_text('')

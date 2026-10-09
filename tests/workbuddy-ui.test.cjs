@@ -29,6 +29,7 @@ async function panel(t) {
     close() { this.closed=true; }
   };
   w.eval(fs.readFileSync(path.join(assets,'preferences.js'),'utf8'));
+  for (const file of ['vendor/marked.js','vendor/purify.js','markdown.js']) w.eval(fs.readFileSync(path.join(assets,file),'utf8'));
   w.eval(fs.readFileSync(path.join(assets,'app.js'),'utf8'));
   await new Promise(resolve => setImmediate(resolve));
   const $ = selector => w.document.querySelector(selector);
@@ -101,4 +102,50 @@ test('interrupted edits remain unconfirmed and errors remain visible', async t =
   assert.match(p.$('#error').textContent,/Runner stopped/);
   assert.match(p.$('.change-title').textContent,/尚未确认/);
   assert.equal(p.$('.change-incomplete') !== null,true);
+});
+
+test('diff headers never consume CSS variables or increment source lines', async t => {
+  const p=await panel(t);
+  const cards=[
+    {id:'edit',kind:'tool',name:'Edit',state:'succeeded',diff_format:'unified',diff:'--- before\n+++ after\n@@ -1 +1 @@\n---tone: red;\n+--tone: blue;'},
+    {id:'write',kind:'tool',name:'Write',state:'succeeded',diff_format:'additions',diff:'+++i;\n+--- before'},
+  ];
+  p.event('snapshot',{run:p.run,cards,final:null});
+  const rows=p.w.document.querySelectorAll('.tool-card');
+  assert.equal(rows[0].querySelector('.stat-del').textContent,'−1');
+  assert.equal(rows[0].querySelector('.diff-remove').textContent,'---tone: red;');
+  assert.equal(rows[1].querySelector('.stat-add').textContent,'+2');
+  assert.equal(rows[1].querySelectorAll('.diff-meta').length,0);
+});
+
+test('Markdown streams into headings, lists, code, tables and final answers', async t => {
+  const p=await panel(t);
+  const snapshot={run:p.run,cards:[{id:'m',kind:'text',streaming:true,text:'# Plan\n\n```js\nconst x = 1;'}],final:null};
+  p.event('snapshot',snapshot);
+  assert.equal(p.$('.reply h1').textContent,'Plan');
+  assert.match(p.$('.reply pre code').textContent,/const x = 1;/);
+  snapshot.cards[0].text+='\n```\n\n- **First**\n- Second\n\n> Quote\n\n| A | B |\n| - | - |\n| 1 | 2 |';
+  snapshot.cards[0].streaming=false;
+  snapshot.final={subtype:'success',text:'## Result\n\n**Done**',permission_denials:[]};
+  p.event('update',snapshot);
+  assert.equal(p.$('.reply ul').children.length,2);
+  assert.equal(p.$('.reply strong').textContent,'First');
+  assert.equal(p.$('.reply table tbody td').textContent,'1');
+  assert.match(p.$('.reply blockquote').textContent,/Quote/);
+  assert.equal(p.$('.final-reply h2').textContent,'Result');
+  assert.equal(p.$('#cards').children.length,1);
+});
+
+test('Markdown cannot execute HTML, load images or navigate dangerous URLs', async t => {
+  const p=await panel(t);
+  const text='<script>window.attacked=true</script>\n\n<img src="https://example.invalid/pixel" onerror="alert(1)">\n\n[x](javascript:alert%281%29) [data](data:text/html,evil) [file](file:///tmp/private) [safe](https://example.com)\n\n![image](https://example.invalid/image.png)\n\n```html\n<b>literal</b>\n```\n\n- [x] done';
+  p.event('snapshot',{run:p.run,cards:[{id:'m',kind:'text',text}],final:null});
+  assert.equal(p.$('.reply script,.reply img,.reply iframe,.reply style'),null);
+  assert.equal(p.w.attacked,undefined);
+  assert.match(p.$('.reply').textContent,/<script>/);
+  assert.equal(p.$('.reply pre code').textContent.trim(),'<b>literal</b>');
+  const links=[...p.w.document.querySelectorAll('.reply a[href]')];
+  assert.equal(links.length,2);
+  for (const link of links) { assert.match(link.href,/^https:/); assert.equal(link.rel,'noopener noreferrer'); assert.equal(link.target,'_blank'); }
+  assert.equal(p.$('.reply input').disabled,true);
 });

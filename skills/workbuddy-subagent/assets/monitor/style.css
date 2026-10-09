@@ -313,8 +313,10 @@ pre, code { font-family: var(--font-mono); }
   --inset: max(var(--gutter), calc((100% - var(--column)) / 2));
   flex: 1; min-height: 0; min-width: 0;
   display: flex; flex-direction: column;
+  overflow-y: auto;
 }
 
+.task-head, .banner, .toolbar { flex-shrink: 0; }
 .task-head { padding: 22px var(--inset) 16px; min-width: 0; }
 .task-kicker { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; min-width: 0; color: var(--text-3); font-size: 13px; }
 .task-profile { font-weight: 600; color: var(--accent-text); }
@@ -429,7 +431,8 @@ pre, code { font-family: var(--font-mono); }
 .follow input:focus-visible + .switch { outline: 2px solid var(--focus); outline-offset: 2px; }
 
 /* ---------- Timeline ---------- */
-.timeline-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
+/* Short panels scroll the header away instead of collapsing the transcript. */
+.timeline-wrap { position: relative; flex: 1 0 180px; min-height: 180px; display: flex; }
 .timeline {
   flex: 1; min-width: 0;
   overflow-y: auto; overflow-x: hidden;
@@ -459,7 +462,30 @@ pre, code { font-family: var(--font-mono); }
 .caption-status { font-weight: 500; color: var(--text-3); }
 .text-card + .text-card { margin-top: -10px; }
 .text-card + .text-card .card-caption { display: none; }
-.reply { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 15px; line-height: 1.72; color: var(--text); }
+.reply { overflow-wrap: anywhere; font-size: 15px; line-height: 1.72; color: var(--text); }
+.markdown { overflow-wrap: anywhere; line-height: 1.72; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown p, .markdown ul, .markdown ol, .markdown blockquote, .markdown pre, .markdown table { margin: 0 0 1em; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4, .markdown h5, .markdown h6 { margin: 1.3em 0 .5em; line-height: 1.35; }
+.markdown h1 { font-size: 1.5em; }
+.markdown h2 { font-size: 1.3em; }
+.markdown h3 { font-size: 1.12em; }
+.markdown ul, .markdown ol { padding-left: 1.6em; }
+.markdown li { margin: .25em 0; }
+.markdown li > p { margin: .4em 0; }
+.markdown blockquote { padding: .3em 1em; border-left: 3px solid var(--accent-line); color: var(--text-2); }
+.markdown blockquote > :last-child { margin-bottom: 0; }
+.markdown a { color: var(--accent-text); text-decoration: underline; text-underline-offset: .18em; }
+.markdown code { padding: .12em .35em; border-radius: 4px; background: var(--code-bg); font-size: .9em; }
+.markdown pre { max-width: 100%; padding: 12px 14px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; background: var(--code-bg); white-space: pre; }
+.markdown pre code { padding: 0; border: 0; background: none; font-size: 12.5px; line-height: 1.65; white-space: pre; }
+.markdown table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-size: .92em; }
+.markdown th, .markdown td { padding: .5em .8em; border: 1px solid var(--line); }
+.markdown th { background: var(--surface-sunken); text-align: left; }
+.markdown hr { margin: 1.4em 0; border: 0; border-top: 1px solid var(--line); }
+.markdown input[type="checkbox"] { margin-right: .4em; accent-color: var(--accent); }
+.final-reply { padding-top: 12px; }
 .streaming .reply::after {
   content: ""; display: inline-block;
   width: 7px; height: 1.05em; margin-left: 3px; vertical-align: -.16em;
@@ -494,7 +520,7 @@ pre, code { font-family: var(--font-mono); }
 
 .tool-body { display: grid; gap: 4px; padding: 4px 14px 14px; border-top: 1px solid var(--line); }
 .tool-section h3 { margin: 10px 0 6px; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
-.code, .result pre, .result-errors pre {
+.code, .result-errors pre {
   margin: 0; padding: 10px 12px; max-height: 360px; overflow: auto;
   border: 1px solid var(--line); border-radius: 8px; background: var(--surface);
   font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--text);

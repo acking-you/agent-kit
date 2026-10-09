@@ -1,9 +1,13 @@
 import importlib.util
 import json
+import os
 from pathlib import Path
+import signal
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "skills/workbuddy-subagent/scripts/workbuddy.py"
@@ -13,6 +17,23 @@ spec.loader.exec_module(wb)
 
 
 class WorkBuddyTests(unittest.TestCase):
+    def test_mixed_log_formats_and_final_result_selection(self):
+        first = dict(type='result',subtype='error_max_turns',is_error=True,result='Earlier')
+        final = dict(type='result',subtype='success',is_error=False,result='Final [answer]')
+        raw = '\x1b[31mnotice\x1b[0m\nnot JSON [broken\n' + json.dumps(first,indent=2)
+        raw += '\n' + json.dumps({'type':'system','subtype':'init','model':'test-model'})
+        raw += '\n' + json.dumps(final,indent=2)
+        value, ok = wb.checked_result(raw, expected_model='test-model')
+        self.assertTrue(ok)
+        self.assertEqual(value['result'], 'Final [answer]')
+
+    def test_large_stream_validation_finishes_promptly(self):
+        raw = (json.dumps({'type':'stream_event','payload':'x'*1000})+'\n')*16000
+        raw += json.dumps(dict(type='result',subtype='success',is_error=False,result='Done',modelUsage={'test':{}}))
+        started = time.monotonic()
+        self.assertTrue(wb.checked_result(raw, expected_model='test')[1])
+        self.assertLess(time.monotonic()-started,3)
+
     def test_verified_choice_beats_numeric_sort(self):
         self.assertEqual(wb.select_model(["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna"], "gpt-6-astra"), "gpt-6-astra")
 
@@ -96,6 +117,52 @@ class WorkBuddyTests(unittest.TestCase):
             with self.assertRaises(FileExistsError):
                 wb.run_task(["/nonexistent/should-never-run"], {}, tmp, [], str(log), 1)
             self.assertEqual(log.read_text(), "keep")
+
+
+class CatalogTests(unittest.TestCase):
+    def exercise_catalog(self, mode):
+        with tempfile.TemporaryDirectory() as tmp:
+            pidfile=Path(tmp)/'child.pid'
+            child='import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(30)'
+            program=Path(tmp)/'catalog.py'
+            program.write_text('''import json,os,subprocess,sys,time
+child=subprocess.Popen([sys.executable,'-c',%r])
+open(%r,'w').write(str(child.pid))
+if %r == 'success':
+    for _ in range(2):
+        request=json.loads(sys.stdin.readline())
+        result={} if request['method']=='initialize' else {'models':{'availableModels':[{'modelId':'test-model'}]}}
+        raw=(json.dumps({'id':request['id'],'result':result})+'\\n').encode()
+        os.write(1,raw[:5]);time.sleep(.02);os.write(1,raw[5:])
+time.sleep(30)
+''' % (child,str(pidfile),mode))
+            timer=None
+            previous=signal.getsignal(signal.SIGTERM)
+            if mode=='interrupt':
+                timer=threading.Timer(.25,lambda:os.kill(os.getpid(),signal.SIGTERM));timer.start()
+            started=time.monotonic()
+            try:
+                if mode=='success':
+                    self.assertEqual(wb.catalog([sys.executable,str(program)],os.environ.copy(),tmp,timeout=1),['test-model'])
+                else:
+                    with self.assertRaises(KeyboardInterrupt if mode=='interrupt' else wb.WorkBuddyError):
+                        wb.catalog([sys.executable,str(program)],os.environ.copy(),tmp,timeout=1 if mode=='interrupt' else .25)
+                self.assertLess(time.monotonic()-started,2)
+                self.assertEqual(signal.getsignal(signal.SIGTERM),previous)
+                if pidfile.exists():
+                    pid=int(pidfile.read_text())
+                    # Reparented children can briefly remain zombies on some hosts.
+                    state=subprocess.run(['ps','-o','stat=','-p',str(pid)],capture_output=True,text=True).stdout.strip()
+                    self.assertTrue(not state or state.startswith('Z'),state)
+            finally:
+                if timer: timer.cancel();timer.join()
+                if pidfile.exists():
+                    try: os.kill(int(pidfile.read_text()),signal.SIGKILL)
+                    except ProcessLookupError: pass
+
+    def test_success_kills_descendant_retaining_stdout(self): self.exercise_catalog('success')
+    def test_timeout_kills_descendant_retaining_stdout(self): self.exercise_catalog('timeout')
+    def test_sigterm_cleans_up_catalog_group(self): self.exercise_catalog('interrupt')
 
 
 if __name__ == "__main__":

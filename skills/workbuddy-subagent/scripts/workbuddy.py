@@ -5,8 +5,9 @@ import json
 import os
 from pathlib import Path
 import plistlib
-import queue
+from collections import deque
 import re
+import selectors
 import shutil
 import signal
 import subprocess
@@ -73,38 +74,67 @@ def isolated_flags():
             "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}']
 
 
+def stop_process_group(proc, grace=5):
+    """Terminate the group we launched, including children retaining stdout."""
+    def send(sig):
+        try:
+            os.killpg(proc.pid, sig)
+        except ProcessLookupError:
+            pass
+    send(signal.SIGTERM)
+    try:
+        proc.wait(timeout=grace)
+    except subprocess.TimeoutExpired:
+        pass
+    finally:
+        send(signal.SIGKILL)
+    proc.wait()
+
+
+def interrupted(signum, frame):
+    raise KeyboardInterrupt
+
+
 def catalog(command, env, cwd, timeout=45):
     """Use native ACP only to enumerate models; never scrape tokens or send a prompt."""
     proc = subprocess.Popen(command + ["--acp", "--permission-mode", "plan", "--tools", ""]
                             + isolated_flags(), cwd=cwd, env=env, stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-    messages = queue.Queue()
-    def reader():
-        for line in proc.stdout:
-            try:
-                messages.put(json.loads(line))
-            except ValueError:
-                pass
-        messages.put(None)
-    threading.Thread(target=reader, daemon=True).start()
+                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
+    selector = selectors.DefaultSelector()
+    selector.register(proc.stdout, selectors.EVENT_READ)
+    messages = deque()
+    pending = b""
     deadline = time.monotonic() + timeout
+    previous = signal.signal(signal.SIGTERM, interrupted) if threading.current_thread() is threading.main_thread() else None
     def rpc(ident, method, params):
-        proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": ident,
-                                    "method": method, "params": params}) + "\n")
+        nonlocal pending
+        proc.stdin.write((json.dumps({"jsonrpc": "2.0", "id": ident,
+                                    "method": method, "params": params}) + "\n").encode())
         proc.stdin.flush()
         while True:
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 raise WorkBuddyError("Model catalog timed out; check WorkBuddy login and connectivity.")
-            try:
-                message = messages.get(timeout=remaining)
-            except queue.Empty:
-                raise WorkBuddyError("Model catalog timed out; check WorkBuddy login and connectivity.")
-            if message is None:
-                raise WorkBuddyError("CLI exited before returning its model catalog.")
+            if not messages:
+                if not selector.select(remaining):
+                    raise WorkBuddyError("Model catalog timed out; check WorkBuddy login and connectivity.")
+                chunk = os.read(proc.stdout.fileno(), 65536)
+                if not chunk:
+                    raise WorkBuddyError("CLI exited before returning its model catalog.")
+                pending += chunk
+                while b"\n" in pending:
+                    line, _, pending = pending.partition(b"\n")
+                    try:
+                        message = json.loads(line)
+                        if isinstance(message, dict):
+                            messages.append(message)
+                    except ValueError:
+                        pass
+                continue
+            message = messages.popleft()
             if message.get("method") and "id" in message:
-                proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": message["id"],
-                    "error": {"code": -32601, "message": "Catalog client does not execute tools"}}) + "\n")
+                proc.stdin.write((json.dumps({"jsonrpc": "2.0", "id": message["id"],
+                    "error": {"code": -32601, "message": "Catalog client does not execute tools"}}) + "\n").encode())
                 proc.stdin.flush()
             if message.get("id") == ident and "method" not in message:
                 if "error" in message:
@@ -120,15 +150,14 @@ def catalog(command, env, cwd, timeout=45):
             raise WorkBuddyError("CLI returned no model IDs; update WorkBuddy or sign in again.")
         return ids
     finally:
-        if proc.poll() is None:
-            proc.terminate()
+        selector.close()
         try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-        proc.stdin.close()
-        proc.stdout.close()
+            stop_process_group(proc)
+        finally:
+            proc.stdin.close()
+            proc.stdout.close()
+            if previous is not None:
+                signal.signal(signal.SIGTERM, previous)
 
 
 def select_model(ids, requested):
@@ -145,12 +174,13 @@ def json_values(text):
     """Native logs can interleave pretty JSON, NDJSON and terminal messages."""
     text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
     decoder = json.JSONDecoder()
+    opening = re.compile(r"[\[{]")
     pos = 0
     while pos < len(text):
-        match = re.search(r"[\[{]", text[pos:])
+        match = opening.search(text, pos)
         if not match:
             break
-        pos += match.start()
+        pos = match.start()
         try:
             value, end = decoder.raw_decode(text, pos)
             yield value
@@ -160,18 +190,23 @@ def json_values(text):
 
 
 def checked_result(text, expected_model=None):
-    events = [v for v in json_values(text) if isinstance(v, dict)]
-    results = [v for v in events if v.get("type") == "result"]
-    if not results:
+    result = None
+    init_models = set()
+    for event in json_values(text):
+        if not isinstance(event, dict):
+            continue
+        if event.get("type") == "result":
+            result = event
+        elif event.get("type") == "system" and event.get("subtype") == "init" and event.get("model"):
+            init_models.add(event["model"])
+    if result is None:
         raise WorkBuddyError("No final JSON result yet. A started/idle/exited job is not proof of success; inspect jobs/logs.")
-    result = results[-1]
     meta_error = result.get("_meta", {}).get("codebuddy.ai/errorMessage")
     ok = (result.get("subtype") == "success" and result.get("is_error") is False
           and not result.get("errors") and not meta_error
           and not result.get("permission_denials")
           and bool(result.get("result", "").strip() or result.get("structured_output")))
-    reported = set(result.get("modelUsage", {})) or {
-        v["model"] for v in events if v.get("type") == "system" and v.get("subtype") == "init" and v.get("model")}
+    reported = set(result.get("modelUsage", {})) or init_models
     if ok and expected_model and reported != {expected_model}:
         raise WorkBuddyError("Reported model differs from the requested model or is missing; inspect the saved transcript.")
     value = {key: result[key] for key in ("session_id", "result", "subtype", "is_error",
@@ -207,19 +242,7 @@ def run_task(command, env, cwd, flags, output, timeout, stop_grace=5):
         proc = subprocess.Popen(command + flags, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, start_new_session=True)
         def stop_tree():
-            # Own process group: a descendant can hold stdout after its parent exits.
-            def send(sig):
-                try:
-                    os.killpg(proc.pid, sig)
-                except ProcessLookupError:
-                    pass
-            send(signal.SIGTERM)
-            try:
-                proc.wait(timeout=stop_grace)
-            except subprocess.TimeoutExpired:
-                pass
-            finally:
-                send(signal.SIGKILL)
+            stop_process_group(proc, stop_grace)
         def expire():
             timed_out.set()
             stop_tree()
@@ -327,8 +350,6 @@ def main():
     emit({"session_id": session, "model": model,
           "profile": args.profile, "cwd": str(cwd), "output": args.output, "monitor_url": monitor_url})
     sys.stdout.flush()
-    def interrupted(signum, frame):
-        raise KeyboardInterrupt
     previous = signal.signal(signal.SIGTERM, interrupted)
     try:
         if record:
