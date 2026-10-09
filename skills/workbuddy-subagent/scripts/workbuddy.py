@@ -8,6 +8,7 @@ import plistlib
 import queue
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -191,7 +192,7 @@ def invoke(command, env, cwd, args, timeout=60):
         raise WorkBuddyError("CLI timed out; check the saved session before retrying.")
 
 
-def run_task(command, env, cwd, flags, output, timeout):
+def run_task(command, env, cwd, flags, output, timeout, stop_grace=5):
     # Reserve output before making a model request. Never replay a task because a log exists.
     stream = None
     if output:
@@ -200,13 +201,28 @@ def run_task(command, env, cwd, flags, output, timeout):
     proc = None
     timer = None
     timed_out = threading.Event()
+    drained = False
     text = []
     try:
         proc = subprocess.Popen(command + flags, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, start_new_session=True)
+        def stop_tree():
+            # Own process group: a descendant can hold stdout after its parent exits.
+            def send(sig):
+                try:
+                    os.killpg(proc.pid, sig)
+                except ProcessLookupError:
+                    pass
+            send(signal.SIGTERM)
+            try:
+                proc.wait(timeout=stop_grace)
+            except subprocess.TimeoutExpired:
+                pass
+            finally:
+                send(signal.SIGKILL)
         def expire():
             timed_out.set()
-            proc.terminate()
+            stop_tree()
         if timeout:
             timer = threading.Timer(timeout, expire)
             timer.daemon = True
@@ -217,6 +233,7 @@ def run_task(command, env, cwd, flags, output, timeout):
                 stream.flush()
             text.append(line)
         code = proc.wait()
+        drained = True
         if timed_out.is_set():
             raise WorkBuddyError("Task timed out; its transcript is preserved. Resume explicitly after checking side effects.")
         return code, "".join(text)
@@ -224,13 +241,9 @@ def run_task(command, env, cwd, flags, output, timeout):
         if timer:
             timer.cancel()
         if proc:
-            if proc.poll() is None:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    proc.wait()
+            if not drained or proc.poll() is None:
+                stop_tree()
+                proc.wait()
             proc.stdout.close()
         if stream:
             stream.close()
@@ -255,11 +268,19 @@ def main():
     run.add_argument("--max-turns", type=int, default=20)
     run.add_argument("--timeout", type=int, default=0, help="Seconds; 0 waits until completion (use host execution sessions)")
     run.add_argument("--output", help="Stream native output into a NEW private local file")
+    run.add_argument("--title", help="Short title shown in the local monitoring panel")
+    run.add_argument("--no-monitor", action="store_true", help="Disable dashboard registration and automatic server startup")
+    monitor_cli = sub.add_parser("monitor", help="Manage the independent read-only local dashboard")
+    monitor_cli.add_argument("action", choices=["start", "status", "stop", "serve"], nargs="?", default="start")
+    monitor_cli.add_argument("--state-dir")
     result = sub.add_parser("result")
     result.add_argument("log", help="Native JSON output or background log path")
     cli = sub.add_parser("cli", help="Native job commands, using WorkBuddy's environment")
     cli.add_argument("args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    if args.command == "monitor":
+        import monitor
+        return monitor.main([args.action] + (["--state-dir", args.state_dir] if args.state_dir else []))
     if args.command == "result":
         value, ok = checked_result(Path(args.log).read_text(errors="replace"))
         emit(value)
@@ -285,7 +306,18 @@ def main():
         raise WorkBuddyError("Output already exists; choose a new path before starting this task.")
     model = select_model(catalog(command, env, cwd), args.model)
     session = args.resume or str(uuid.uuid4())
-    flags = ["-p", "--output-format", "stream-json", "--verbose",
+    record = None
+    monitor_url = None
+    if not args.no_monitor:
+        import monitor
+        root = monitor.state_dir()
+        monitor_url = monitor.ensure_server(root)
+        args.output = str(Path(args.output).expanduser().resolve()) if args.output else str(root / "runs" / (uuid.uuid4().hex + ".jsonl"))
+        record = monitor.RunRecord(root, session_id=session, model=model, profile=args.profile,
+                                   cwd=str(cwd), output=args.output, title=args.title or f"{args.profile.title()} with {model}",
+                                   resumed=bool(args.resume))
+        monitor_url += "#" + record.id
+    flags = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
              "--permission-mode", args.permission_mode, "--tools", args.tools,
              "--effort", args.effort, "--max-turns", str(args.max_turns)] + isolated_flags()
     flags += ["--model", model]
@@ -293,10 +325,25 @@ def main():
     # End option parsing: prompt files may contain leading dashes or shell syntax.
     flags += ["--", prompt]
     emit({"session_id": session, "model": model,
-          "profile": args.profile, "cwd": str(cwd), "output": args.output})
+          "profile": args.profile, "cwd": str(cwd), "output": args.output, "monitor_url": monitor_url})
     sys.stdout.flush()
-    code, stdout = run_task(command, env, cwd, flags, args.output, args.timeout)
-    result, ok = checked_result(stdout, expected_model=model)
+    def interrupted(signum, frame):
+        raise KeyboardInterrupt
+    previous = signal.signal(signal.SIGTERM, interrupted)
+    try:
+        if record:
+            record.update(status="running")
+        code, stdout = run_task(command, env, cwd, flags, args.output, args.timeout)
+        result, ok = checked_result(stdout, expected_model=model)
+        if record:
+            record.finish("completed" if not code and ok else "failed", exit_code=code,
+                          error=None if not code and ok else "CLI result validation failed. Inspect the final result and transcript.")
+    except BaseException as error:
+        if record:
+            record.finish("interrupted" if isinstance(error, KeyboardInterrupt) else "failed", error=str(error) or "Task interrupted.")
+        raise
+    finally:
+        signal.signal(signal.SIGTERM, previous)
     emit(result)
     if code or not ok:
         print("WorkBuddy task failed or is incomplete. For auth errors, first check desktop login. If desktop works, this CLI may lack its credential bootstrap; see references/compatibility.md. Do not silently change models.", file=sys.stderr)
@@ -307,6 +354,9 @@ def main():
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except (WorkBuddyError, OSError, ValueError) as error:
+    except (WorkBuddyError, OSError, ValueError, RuntimeError) as error:
         print(f"workbuddy: {error}", file=sys.stderr)
         sys.exit(1)
+    except KeyboardInterrupt:
+        print("workbuddy: Task interrupted; transcript preserved.", file=sys.stderr)
+        sys.exit(130)

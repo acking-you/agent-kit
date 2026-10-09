@@ -61,6 +61,10 @@ During initial diagnostics, `--bg` acknowledged a launch but produced an empty l
 
 ## Long-running work
 
-Prefer a persistent execution handle supplied by the parent agent's host. Save the native session ID and stream log while the CLI is alive. Use an explicit resume after completion or interruption; inspect the workspace before repeating side-effecting work. This skill does not install a daemon, launch agent, cron job, or automatic retry loop.
+Prefer a persistent execution handle supplied by the parent agent's host. Save the native session ID and stream log while the CLI is alive. Use an explicit resume after completion or interruption; inspect the workspace before repeating side-effecting work. This skill does not install an OS service, launch agent, cron job, or automatic retry loop. Its optional local monitoring server is an on-demand observer; it does not schedule or drive model tasks. See [monitoring](monitoring.md).
 
 Output files must not already exist. They are created with mode `0600`, updated as events arrive, and may contain task context or source code; keep them outside the published skill repository. A missing final result is a pending/failed task, never a completed task.
+
+The monitoring extension was also verified with native partial messages on both tested model IDs: Claude text streamed into one final reply, GPT Read/Edit events produced a successful change preview, and the modified word counter passed nine independent cases. Local automated checks cover replay/reconnect, split UTF-8 JSONL lines, terminal-event races, model/result failures, origin/path isolation and literal rendering.
+
+Monitoring regression validation includes multiple text blocks sharing a message ID, timeout escalation against a SIGTERM-ignoring descendant holding stdout, and browser recovery directly from inferred interruption to a completed run. The latter was verified without reloading or manually selecting the session. The installed skill also resumed the Claude session with the same reported model and automatically created its private output log.

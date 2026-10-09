@@ -94,6 +94,12 @@ python3 "$SKILL_DIR/scripts/workbuddy.py" run \
 
 Run appropriate tests and inspect the diff in the parent agent. Add `Bash` only if the task needs shell execution and the user has authorized its scope. File/tool restrictions and permission modes are not an OS sandbox. Do not enable bypass permissions to make a blocked task pass. The helper disables hooks and inherited MCP servers and excludes project/local CLI settings; pass needed context in the brief.
 
+## Observe live output
+
+Runs start or reuse a read-only local monitoring panel by default. Add `--title "Short task name"`, retain the returned `monitor_url`, and open it in the host browser panel. In Codex, use `open_in_codex` with `target: {type: "browser", url: monitor_url}` and `placement: "right"`. Reuse an already open panel when practical. The page displays streaming public replies, tool calls/results, change previews, session turns and validated run status. Closing or refreshing it does not interrupt the task.
+
+If `--output` is omitted, the helper creates a private log under `~/.workbuddy-subagent/monitor/runs`. Use `--no-monitor` to opt out. `monitor start`, `monitor status` and `monitor stop` manage only the observer; stopping it never stops WorkBuddy. Reopen the newly returned URL after a server restart. See [monitoring](references/monitoring.md) for storage, reconnect behavior, security boundaries and troubleshooting. The panel's completed state means the CLI result passed validation; the parent still owns task-specific acceptance checks.
+
 ## Continue and manage longer tasks
 
 Record the printed `session_id`, chosen model, absolute workspace, output path, host execution handle, task scope, and acceptance criteria. The native CLI persists conversation history. Resume **that exact session** after its previous turn exits:

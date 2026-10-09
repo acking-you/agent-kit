@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WorkBuddy · Live sessions</title><link rel="stylesheet" href="style.css"><script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><div class="brand"><span class="mark">w</span> WorkBuddy <span class="muted">/</span> <span class="subtitle">Live sessions</span></div><span id="connection" class="connection">Connecting</span></header>
+  <div class="layout">
+    <aside><div class="rail-heading"><span>SESSIONS</span><span id="run-count">0</span></div><nav id="sessions" aria-label="WorkBuddy sessions"></nav><div class="rail-note"><span class="small-dot"></span> Read-only observer<br><span>Tasks keep running when you close this page.</span></div></aside>
+    <main>
+      <section id="welcome" class="welcome"><span class="eyebrow">YOUR AGENTS, IN VIEW</span><h1>A window into the work.</h1><p>Start a WorkBuddy subagent with the skill. Its replies, tool activity and file changes will appear here as they happen.</p><div class="empty-line"></div><p class="muted">Waiting for the first run…</p></section>
+      <section id="workspace" hidden>
+        <div class="run-heading"><div><div class="eyebrow" id="profile"></div><h1 id="title"></h1><p id="model" class="muted"></p></div><span id="status" class="badge"></span></div>
+        <div class="metadata"><span id="duration"></span><span id="cwd"></span><label class="turn-label">Turn <select id="turn" aria-label="Session turn"></select></label></div>
+        <div id="error" class="error" role="alert" hidden></div>
+        <div class="toolbar"><div class="filters" role="group" aria-label="Filter activity"><button data-filter="all" class="selected" aria-pressed="true">All activity</button><button data-filter="text" aria-pressed="false">Replies</button><button data-filter="tool" aria-pressed="false">Tools</button><button data-filter="changes" aria-pressed="false">Changes</button></div><span id="event-count" class="muted"></span></div>
+        <div id="timeline" tabindex="0" aria-label="Live activity timeline"><div id="waiting" class="waiting">Waiting for the first public event. The agent may be starting or thinking.</div><div id="cards"></div><section id="result" class="result" hidden></section></div>
+        <footer><label><input type="checkbox" id="follow" checked> Follow output</label><span id="activity" class="muted"></span><button id="jump" hidden>Jump to latest ↓</button></footer>
+      </section>
+    </main>
+  </div>
+</body>
+</html>
