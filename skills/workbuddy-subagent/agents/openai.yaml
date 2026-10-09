@@ -1,6 +1,6 @@
 interface:
   display_name: "WorkBuddy Subagent"
-  short_description: "Route creative work to Opus and rigorous work to Astra"
-  default_prompt: "Use $workbuddy-subagent to select a flagship model for this task, delegate a bounded brief, and verify the result."
+  short_description: "Discuss plans with Opus; verify facts and execute with Astra"
+  default_prompt: "Use $workbuddy-subagent to discuss this task with Opus or verify its factual premises with Astra, choosing the model that fits the work."
 policy:
   allow_implicit_invocation: true

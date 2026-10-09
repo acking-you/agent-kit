@@ -1,6 +1,6 @@
 ---
 name: workbuddy-subagent
-description: Delegate discussions, frontend design, writing, technical blogs, code review, and implementation tasks to WorkBuddy's bundled CLI as a resumable external subagent. Use when the user asks to consult WorkBuddy, Opus, or Astra through WorkBuddy, obtain a second opinion, or continue a WorkBuddy task. Routes creative work to the newest available Opus and rigorous review or execution to the newest available Astra.
+description: Use WorkBuddy's bundled CLI as a resumable subagent. Consult Claude/Opus for plan and architecture discussion, tradeoffs, product decisions, frontend design and writing; consult GPT/Astra for factual investigation, verification and execution of agreed plans. Use when WorkBuddy is requested, a task benefits from an external thinking partner or verifier, or a WorkBuddy session should continue.
 ---
 
 # WorkBuddy Subagent
@@ -13,19 +13,44 @@ Resolve `SKILL_DIR` to the directory containing this file. Use absolute paths fo
 
 ## Choose a model by task
 
-These are the user's workflow preferences, not universal benchmark claims:
+These are the user's practical routing preferences, not universal rankings. Neither family is infallible; code, tests and sources settle factual questions whichever model raised them.
 
-| Profile | Preferred family | Recommended work |
+- **Claude, newest Opus: thinking partner.** Consult it often, not only for polish. Use it for plans, architecture, tradeoffs, product decisions, alternative approaches, subjective judgment, frontend/UI design, writing, technical blogs, narrative structure and imaginative ideas.
+- **GPT, newest Astra: investigator and executor.** Use it for factual investigation, validation, correctness checks, reproducible evidence, code review and precise execution of an agreed plan. The user finds it meticulous with facts but less helpful for subjective ideation.
+
+| Profile | Model | Use for |
 | --- | --- | --- |
-| `design` | Latest available Claude Opus | Frontend interfaces, visual hierarchy, interaction design, alternative layouts |
-| `writing` | Latest available Claude Opus | Writing, editing, technical blogs, narrative structure, clear explanations |
-| `brainstorm` | Latest available Claude Opus | Open-ended discussion, original ideas, competing approaches, reframing a problem |
-| `review` | Latest available GPT Astra | Correctness, edge cases, evidence checks, invariants, rigorous code and design review |
-| `execute` (default) | Latest available GPT Astra | Precise implementation, debugging, verification, reproducible execution |
+| `brainstorm` | Opus | Plan and architecture discussion, tradeoffs, product decisions, alternatives, reframing, ideation |
+| `design` | Opus | Frontend interfaces, visual hierarchy, interaction states, alternative layouts |
+| `writing` | Opus | Writing, editing, technical blogs, narrative structure, clear explanations |
+| `review` | Astra | Factual investigation, checking claims and plan premises, edge cases, invariants, code and design review |
+| `execute` (CLI default) | Astra | Precise implementation of an agreed plan, debugging, reproducible verification |
 
-For mixed work, have Opus propose or draft, then ask Astra to check specific correctness claims. Give each a bounded brief; reconcile disagreements using code, tests, and sources. Do not automatically double every trivial task.
+**Choose `--profile` explicitly for new tasks.** The helper defaults to `execute`, so a discussion launched without `--profile brainstorm` goes to Astra unless an explicit `--model` overrides it.
 
-An explicit user model choice always wins (`--model EXACT_ID`). On resume, always pass the exact model ID recorded for the previous turn. The packaged CLI can reset to `auto` when `--model` is omitted, so the helper rejects that ambiguity. Change the ID only when deliberately switching models. To obtain an independent opinion, create a separate session.
+Consult Opus proactively at decision points: when several reasonable options exist, before committing to a nontrivial plan or architecture, when the user asks for an opinion or recommendation, or when progress has stalled. Do not delegate trivial, mechanical or already-decided work.
+
+| Scenario | Route |
+| --- | --- |
+| "Queue or cron for this sync job?" / "How should we split this module?" | `brainstorm` (Opus); keep read-only tools if it must inspect the repo |
+| "Which onboarding flow should ship first?" | `brainstorm` (Opus) |
+| "Redesign this settings page" / "Draft a blog post on this release" | `design` / `writing` (Opus) |
+| "Does this library really retry on 429? Show me where." | `review` (Astra), read-only tools |
+| "Is this migration plan safe for our schema?" | Opus proposes or critiques the plan, then Astra checks its premises with `review` |
+| "Implement the approved plan in this checkout" | `execute` (Astra) |
+
+### Mixed work
+
+1. Opus produces an opinionated proposal: a recommendation, credible alternatives, tradeoffs, assumptions, and what would change its mind.
+2. The parent extracts the **falsifiable premises** (API behavior, constraints, compatibility, performance, edge cases, feasibility) and asks Astra to test them with `review`.
+3. Keep two outcomes separate. **Falsifiable errors** are settled by evidence, not by which model asserted them. **Subjective disagreements** (taste, priorities, risk appetite) are reported as tradeoffs for the parent or user to decide.
+4. Resume Opus with verified facts or user feedback when they affect the recommendation or clarify a tradeoff. Do not force both models onto every task.
+
+### Explicit choices and exact IDs
+
+An explicit user model choice always wins. "Claude" or "Opus" maps to `--model claude` (newest Opus). "GPT" or "Astra" maps to `--model gpt` (newest Astra). A named model such as Sonnet, Sol or a `-1m` variant needs its exact catalog ID in `--model EXACT_ID`. Family-level preferences never authorize a different tier: automatic selection only picks Opus or Astra.
+
+On resume, always pass the exact model ID recorded for the previous turn. The packaged CLI can reset to `auto` when `--model` is omitted, so the helper rejects that ambiguity. Change the ID only when deliberately switching models. To obtain an independent opinion, create a separate session.
 
 Discover the current catalog before starting work:
 
@@ -40,9 +65,9 @@ For a request about the latest or strongest model, check official vendor model p
 
 ## Delegate a bounded task
 
-Write a UTF-8 prompt file with: objective, relevant context, allowed workspace/files, acceptance criteria, and requested output. External sessions do not inherit the parent chat. Include relevant repository instructions and any user constraints. Ask for findings, assumptions, evidence, and unresolved questions; do not request hidden reasoning.
+Write a UTF-8 prompt file with: objective, relevant context, allowed workspace/files, acceptance criteria, and requested output. External sessions do not inherit the parent chat. Include relevant repository instructions and any user constraints. Ask for findings, assumptions, evidence, and unresolved questions; do not request hidden reasoning. For decisions, ask Opus for a recommendation and tradeoffs; for open exploration, invite alternatives and reframing. Ask Astra for evidence (paths and lines, commands, sources), a verdict per claim, and explicit "undetermined" items. Brief templates are in [model policy](references/model-policy.md#example-briefs).
 
-For a discussion or supplied-text review, disable tools:
+For a self-contained discussion or supplied-text review, disable tools. If Opus must inspect the repository to discuss its architecture, omit `--tools` to keep the read-only default.
 
 ```bash
 python3 "$SKILL_DIR/scripts/workbuddy.py" run \
@@ -50,12 +75,12 @@ python3 "$SKILL_DIR/scripts/workbuddy.py" run \
   --prompt-file /absolute/task/brief.txt --output /absolute/task/opus-turn-1.jsonl
 ```
 
-For read-only source review, omit `--tools`: the default is `Read,Glob,Grep`, with `plan` permission mode.
+For read-only source review or factual investigation, omit `--tools`: the default is `Read,Glob,Grep`, with `plan` permission mode.
 
 ```bash
 python3 "$SKILL_DIR/scripts/workbuddy.py" run \
   --cwd /absolute/project --profile review \
-  --prompt-file /absolute/task/review.txt --output /absolute/task/astra-review.jsonl
+  --prompt-file /absolute/task/facts.txt --output /absolute/task/astra-facts.jsonl
 ```
 
 For authorized edits, preferably use an isolated checkout. Enable only the necessary tools:
