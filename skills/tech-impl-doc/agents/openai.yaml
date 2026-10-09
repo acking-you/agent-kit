@@ -1,0 +1,6 @@
+interface:
+  display_name: "Tech Implementation Docs"
+  short_description: "Evidence-based technical docs and focused edits"
+  default_prompt: "Use $tech-impl-doc to explain how this works, or to make a focused edit to this technical doc."
+policy:
+  allow_implicit_invocation: true

@@ -11,7 +11,7 @@ Runs an independent model session through WorkBuddy's installed CLI and existing
 
 - Resolve `SKILL_DIR` to this file's directory. Use absolute paths for the helper, workspace, brief and log.
 - Requires Python 3.9+, Node.js 18.20.8+ and WorkBuddy. Automatic discovery is macOS only. Tested setup: WorkBuddy 5.7.6 / CLI 2.156.0, 2026-10-09.
-- Encrypted installations need the [native credential bootstrap](references/compatibility.md#native-credential-bootstrap), which requires explicit user consent. If this skill's local `user-config.json` already records consent, reuse it without asking again. Never create or copy consent for someone else's installation. Credentials are initialized through WorkBuddy's native APIs, never exported.
+- Encrypted installations need the [native credential bootstrap](references/compatibility.md#native-credential-bootstrap), which requires explicit user consent. Reuse this installation's recorded consent in `~/.workbuddy-subagent/config.json` without asking again. Never import consent from a downloaded skill or another installation. Credentials are initialized through WorkBuddy's native APIs, never exported.
 
 ## Route by task
 

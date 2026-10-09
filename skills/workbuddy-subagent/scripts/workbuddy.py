@@ -6,12 +6,14 @@ import os
 from pathlib import Path
 import plistlib
 from collections import deque
+from contextlib import contextmanager
 import re
 import selectors
 import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -19,6 +21,35 @@ import uuid
 
 class WorkBuddyError(Exception):
     pass
+
+
+def bootstrap_authorized(data, config=None):
+    # Authorization belongs to this WorkBuddy installation, not a copied skill.
+    path = config or Path.home() / ".workbuddy-subagent/config.json"
+    if not path.is_file():
+        return False
+    consent = json.loads(path.read_text())
+    return (consent.get("native_bootstrap_consent") is True
+            and consent.get("workbuddy_data_dir") == str(data.resolve()))
+
+
+@contextmanager
+def private_stderr(output=None):
+    """Retain diagnostics separately; never parse or project them as model output."""
+    if output:
+        path = Path(str(output) + ".stderr")
+        stream = os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb")
+    else:
+        stream = tempfile.NamedTemporaryFile(prefix="workbuddy-", suffix=".stderr", delete=False)
+        path = Path(stream.name)
+    try:
+        yield stream
+    finally:
+        stream.close()
+        if path.stat().st_size:
+            print(f"Private CLI diagnostics: {path}", file=sys.stderr)
+        else:
+            path.unlink()
 
 
 def runtime():
@@ -51,9 +82,7 @@ def runtime():
             env["CLIENT_INFO_PRODUCT_VERSION"] = version
             env["CLIENT_INFO_PLUGIN_VERSION"] = version
     env["PATH"] = str(Path(node).parent) + os.pathsep + env.get("PATH", "")
-    consent_file = Path(__file__).resolve().parents[1] / "user-config.json"
-    consent = json.loads(consent_file.read_text()) if consent_file.is_file() else {}
-    native = os.environ.get("WORKBUDDY_NATIVE_BOOTSTRAP") == "1" or consent.get("native_bootstrap_consent") is True
+    native = os.environ.get("WORKBUDDY_NATIVE_BOOTSTRAP") == "1" or bootstrap_authorized(data)
     command = [node, str(cli)]
     if native:
         if sys.platform != "darwin":
@@ -81,6 +110,11 @@ def stop_process_group(proc, grace=5):
             os.killpg(proc.pid, sig)
         except ProcessLookupError:
             pass
+        except PermissionError:
+            # macOS may deny signalling a group whose leader has already exited.
+            # Reap it, but do not hide a failure to stop a still-running process.
+            if proc.poll() is None:
+                raise
     send(signal.SIGTERM)
     try:
         proc.wait(timeout=grace)
@@ -97,9 +131,14 @@ def interrupted(signum, frame):
 
 def catalog(command, env, cwd, timeout=45):
     """Use native ACP only to enumerate models; never scrape tokens or send a prompt."""
+    with private_stderr() as diagnostics:
+        return _catalog(command, env, cwd, timeout, diagnostics)
+
+
+def _catalog(command, env, cwd, timeout, diagnostics):
     proc = subprocess.Popen(command + ["--acp", "--permission-mode", "plan", "--tools", ""]
                             + isolated_flags(), cwd=cwd, env=env, stdin=subprocess.PIPE,
-                            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, start_new_session=True)
+                            stdout=subprocess.PIPE, stderr=diagnostics, start_new_session=True)
     selector = selectors.DefaultSelector()
     selector.register(proc.stdout, selectors.EVENT_READ)
     messages = deque()
@@ -227,7 +266,16 @@ def invoke(command, env, cwd, args, timeout=60):
         raise WorkBuddyError("CLI timed out; check the saved session before retrying.")
 
 
-def run_task(command, env, cwd, flags, output, timeout, stop_grace=5):
+def run_task(command, env, cwd, flags, output, timeout, stop_grace=5, prompt=""):
+    # A private, unlinked file avoids argv limits and pipe write/read deadlocks.
+    with tempfile.TemporaryFile() as input_stream, private_stderr(output) as diagnostics:
+        input_stream.write(prompt.encode("utf-8"))
+        input_stream.seek(0)
+        return _run_task(command, env, cwd, flags, output, timeout, stop_grace,
+                         input_stream, diagnostics)
+
+
+def _run_task(command, env, cwd, flags, output, timeout, stop_grace, input_stream, diagnostics):
     # Reserve output before making a model request. Never replay a task because a log exists.
     stream = None
     if output:
@@ -239,8 +287,9 @@ def run_task(command, env, cwd, flags, output, timeout, stop_grace=5):
     drained = False
     text = []
     try:
-        proc = subprocess.Popen(command + flags, cwd=cwd, env=env, stdin=subprocess.DEVNULL,
-                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, start_new_session=True)
+        proc = subprocess.Popen(command + flags, cwd=cwd, env=env, stdin=input_stream,
+                                stdout=subprocess.PIPE, stderr=diagnostics, text=True,
+                                encoding="utf-8", errors="replace", start_new_session=True)
         def stop_tree():
             stop_process_group(proc, stop_grace)
         def expire():
@@ -345,8 +394,6 @@ def main():
              "--effort", args.effort, "--max-turns", str(args.max_turns)] + isolated_flags()
     flags += ["--model", model]
     flags += ["--resume" if args.resume else "--session-id", session]
-    # End option parsing: prompt files may contain leading dashes or shell syntax.
-    flags += ["--", prompt]
     emit({"session_id": session, "model": model,
           "profile": args.profile, "cwd": str(cwd), "output": args.output, "monitor_url": monitor_url})
     sys.stdout.flush()
@@ -354,7 +401,7 @@ def main():
     try:
         if record:
             record.update(status="running")
-        code, stdout = run_task(command, env, cwd, flags, args.output, args.timeout)
+        code, stdout = run_task(command, env, cwd, flags, args.output, args.timeout, prompt=prompt)
         result, ok = checked_result(stdout, expected_model=model)
         if record:
             record.finish("completed" if not code and ok else "failed", exit_code=code,

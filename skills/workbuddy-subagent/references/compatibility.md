@@ -20,13 +20,14 @@ Independently launched Node.js cannot read WorkBuddy's encrypted authentication 
 Consent:
 
 - Requires the installation owner's explicit authorization. For one invocation, set `WORKBUDDY_NATIVE_BOOTSTRAP=1`.
-- To persist it, create `user-config.json` beside `SKILL.md` with mode `0600`:
+- To persist it, create `~/.workbuddy-subagent/config.json` with mode `0600` in a `0700` directory, outside the installed skill. Bind it to the resolved absolute WorkBuddy data directory:
 
   ```json
-  {"native_bootstrap_consent": true}
+  {"native_bootstrap_consent": true, "workbuddy_data_dir": "/absolute/path/to/.workbuddy"}
   ```
 
-- When that file already records consent, reuse it without asking again. It is personal: never commit, copy or distribute it.
+- Reuse consent for the matching data directory without asking again. It is personal: never commit, copy or distribute it. A different data directory does not inherit it.
+- Older versions stored `user-config.json` beside `SKILL.md`. During an authorized upgrade, migrate only consent already known to belong to this installation, preserving other configuration fields and adding its resolved data directory. Never migrate a file fetched from the repository or someone else's skill. The runtime no longer reads consent from the skill folder.
 - Without consent, the helper uses ordinary CLI startup. On bootstrap failure it fails closed.
 
 The adapter depends on internal, version-dependent APIs. After WorkBuddy updates, rerun model, resume and tool smoke checks.
@@ -41,7 +42,7 @@ The adapter depends on internal, version-dependent APIs. After WorkBuddy updates
 
 ## Tested setup (macOS, 2026-10-09)
 
-WorkBuddy 5.7.6 with bundled CLI 2.156.0, native bootstrap authorized via `user-config.json`:
+WorkBuddy 5.7.6 with bundled CLI 2.156.0, native bootstrap explicitly authorized:
 
 - Discovery, ACP initialization and catalog enumeration succeeded.
 - `gpt-6-astra` and `claude-opus-5.5` completed text-only tasks and fresh-process resumes with history recall, reporting the requested model IDs.
@@ -59,3 +60,5 @@ Known caveats (do not assume newer builds behave the same):
 Use the parent host's persistent execution handle. Save the session ID and log while the CLI runs; after completion or interruption, inspect the workspace before resuming side-effecting work. The skill installs no OS service, cron job or retry loop.
 
 Output paths must not already exist. Logs are created `0600`, updated as events arrive, and may contain task context or source code; keep them outside published repositories. A missing final result means pending or failed, never complete.
+
+Prompts travel through stdin backed by a private temporary file, so large briefs are not subject to process argument limits. CLI stderr is kept separately with mode `0600`: `<output>.stderr` for task logs, or a temporary file for catalog calls and tasks without an output path. Nonempty diagnostic paths are printed; empty files are removed. These diagnostics are never parsed as model responses or sent to the browser.

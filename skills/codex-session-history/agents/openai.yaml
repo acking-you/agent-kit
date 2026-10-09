@@ -1,7 +1,0 @@
-interface:
-  display_name: "Codex Session History"
-  short_description: "Search local Codex session history"
-  default_prompt: "Use $codex-session-history to find local Codex sessions by id, provider, time range, or preview text."
-
-policy:
-  allow_implicit_invocation: true
