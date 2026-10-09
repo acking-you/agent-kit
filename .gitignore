@@ -1,1 +1,3 @@
 config
+__pycache__/
+skills/workbuddy-subagent/user-config.json

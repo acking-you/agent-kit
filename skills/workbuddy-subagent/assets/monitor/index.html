@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>WorkBuddy · Agent monitor</title>
+  <!-- Must stay before style.css: resolves theme/language onto <html> before first paint. -->
+  <script src="preferences.js"></script>
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/marked.js" defer></script>
+  <script src="vendor/purify.js" defer></script>
+  <script src="markdown.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <button id="rail-toggle" class="icon-button rail-toggle" type="button" aria-controls="rail" aria-expanded="false" aria-label="Show sessions" title="Show sessions" data-i18n-aria-label="rail.toggle" data-i18n-title="rail.toggle">
+      <span data-icon="panel"></span><span id="rail-count" class="count-badge">0</span>
+    </button>
+    <div class="brand">
+      <span class="brand-mark" data-icon="brand"></span>
+      <span class="brand-name">WorkBuddy</span>
+      <span class="brand-sub" data-i18n="app.subtitle">Agent monitor</span>
+    </div>
+    <div class="topbar-end">
+      <span id="connection" class="connection tone-neutral" role="status"><span class="dot"></span><span class="connection-label"></span></span>
+      <button id="settings-open" class="icon-button" type="button" aria-haspopup="dialog" aria-controls="settings" aria-label="Display preferences" title="Display preferences" data-i18n-aria-label="settings.open" data-i18n-title="settings.open">
+        <span data-icon="sliders"></span>
+      </button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside id="rail" class="rail" aria-labelledby="rail-title">
+      <div class="rail-head">
+        <h2 id="rail-title" data-i18n="sessions.heading">Sessions</h2>
+        <span id="run-count" class="count-badge">0</span>
+        <button id="rail-close" class="icon-button rail-close" type="button" aria-label="Hide sessions" title="Hide sessions" data-i18n-aria-label="rail.close" data-i18n-title="rail.close"><span data-icon="close"></span></button>
+      </div>
+      <nav id="sessions" class="sessions" aria-label="WorkBuddy sessions" data-i18n-aria-label="sessions.navLabel"></nav>
+      <div class="rail-note">
+        <span data-icon="eye"></span>
+        <p><strong data-i18n="rail.noteTitle">Read-only observer</strong><span data-i18n="rail.noteBody">Watching never controls a task. Tasks keep running when you close this panel.</span></p>
+      </div>
+    </aside>
+    <div id="scrim" class="scrim" hidden></div>
+
+    <main class="main">
+      <section id="welcome" class="welcome" aria-labelledby="welcome-title">
+        <div class="welcome-inner">
+          <span class="welcome-mark"><span data-icon="pulse"></span></span>
+          <h1 id="welcome-title" data-i18n="welcome.title">Nothing to observe yet</h1>
+          <p class="welcome-body" data-i18n="welcome.body">Start a WorkBuddy subagent with the skill. Its replies, tool activity and file changes will appear here as they happen.</p>
+          <ul class="welcome-steps">
+            <li><span data-icon="sparkle"></span><span data-i18n="welcome.step1">Replies stream in as the agent writes them</span></li>
+            <li><span data-icon="terminal"></span><span data-i18n="welcome.step2">Tool calls open to show their arguments and results</span></li>
+            <li><span data-icon="pencil"></span><span data-i18n="welcome.step3">File edits are previewed and marked pending until applied</span></li>
+          </ul>
+          <p id="welcome-status" class="welcome-status tone-active" role="status"><span class="dot"></span><span id="welcome-status-text"></span></p>
+        </div>
+      </section>
+
+      <section id="workspace" class="workspace" hidden>
+        <header class="task-head">
+          <div class="task-kicker">
+            <span id="profile" class="task-profile"></span>
+            <span class="kicker-sep" aria-hidden="true">·</span>
+            <span id="session-id" class="task-session"></span>
+            <span class="select-wrap turn-picker">
+              <select id="turn" aria-label="Session turn" data-i18n-aria-label="turn.aria"></select>
+              <span class="select-chevron" data-icon="chevronDown"></span>
+            </span>
+          </div>
+          <h1 id="title" class="task-title"></h1>
+          <div class="task-meta">
+            <span id="status" class="status-pill tone-neutral"></span>
+            <span class="meta-item" data-i18n-title="task.elapsed" title="Elapsed time"><span data-icon="clock"></span><span id="duration"></span></span>
+            <span class="meta-item meta-model"><span data-icon="cpu"></span><span id="model"></span></span>
+            <span class="meta-item meta-path"><span data-icon="folder"></span><span id="cwd" class="path"></span></span>
+          </div>
+        </header>
+
+        <div id="error" class="banner" role="alert" hidden></div>
+
+        <div class="toolbar">
+          <div class="filters" role="group" aria-label="Filter activity" data-i18n-aria-label="filter.group">
+            <button type="button" data-filter="all" class="selected" aria-pressed="true"><span data-i18n="filter.all">All</span><span class="seg-count"></span></button>
+            <button type="button" data-filter="text" aria-pressed="false"><span data-i18n="filter.text">Replies</span><span class="seg-count"></span></button>
+            <button type="button" data-filter="tool" aria-pressed="false"><span data-i18n="filter.tool">Tools</span><span class="seg-count"></span></button>
+            <button type="button" data-filter="changes" aria-pressed="false"><span data-i18n="filter.changes">Changes</span><span class="seg-count"></span></button>
+          </div>
+          <div class="toolbar-end">
+            <span id="event-count" class="event-count"></span>
+            <label class="follow" data-i18n-title="follow.aria" title="Follow new output">
+              <input type="checkbox" id="follow" checked aria-label="Follow new output" data-i18n-aria-label="follow.aria">
+              <span class="switch" aria-hidden="true"></span>
+              <span class="follow-text" data-i18n="follow.label">Follow</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="timeline-wrap">
+          <div id="timeline" class="timeline" tabindex="0" aria-label="Live activity timeline" data-i18n-aria-label="timeline.aria">
+            <div id="waiting" class="waiting is-loading">
+              <span class="dot"></span>
+              <div><p class="waiting-title"></p><p class="waiting-body"></p></div>
+            </div>
+            <div id="cards" class="cards"></div>
+            <p id="filter-empty" class="filter-empty" hidden></p>
+            <section id="result" class="result" hidden></section>
+            <p id="activity" class="activity" hidden></p>
+          </div>
+          <button id="jump" class="jump" type="button" hidden><span data-icon="arrowDown"></span><span data-i18n="jump">Jump to latest</span></button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="settings" class="settings" aria-labelledby="settings-title">
+    <div class="sheet">
+      <div class="sheet-head">
+        <h2 id="settings-title" data-i18n="settings.title">Display preferences</h2>
+        <button id="settings-close" class="icon-button" type="button" aria-label="Close preferences" title="Close preferences" data-i18n-aria-label="settings.close" data-i18n-title="settings.close"><span data-icon="close"></span></button>
+      </div>
+      <fieldset class="pref" aria-describedby="language-hint">
+        <legend data-i18n="settings.language">Language</legend>
+        <div class="segmented">
+          <label><input type="radio" name="language" value="system"><span class="seg-face"><span data-icon="globe"></span><span data-i18n="option.system">System</span></span></label>
+          <label data-i18n-title="langName.en" title="English"><input type="radio" name="language" value="en"><span class="seg-face"><span lang="en">English</span></span></label>
+          <label data-i18n-title="langName.zh" title="Simplified Chinese"><input type="radio" name="language" value="zh"><span class="seg-face"><span lang="zh-CN">简体中文</span></span></label>
+        </div>
+        <p id="language-hint" class="pref-hint"></p>
+      </fieldset>
+      <fieldset class="pref" aria-describedby="theme-hint">
+        <legend data-i18n="settings.theme">Theme</legend>
+        <div class="segmented">
+          <label><input type="radio" name="theme" value="system"><span class="seg-face"><span data-icon="monitor"></span><span data-i18n="option.system">System</span></span></label>
+          <label><input type="radio" name="theme" value="light"><span class="seg-face"><span data-icon="sun"></span><span data-i18n="option.light">Light</span></span></label>
+          <label><input type="radio" name="theme" value="dark"><span class="seg-face"><span data-icon="moon"></span><span data-i18n="option.dark">Dark</span></span></label>
+        </div>
+        <p id="theme-hint" class="pref-hint"></p>
+      </fieldset>
+      <p id="storage-note" class="sheet-note"></p>
+    </div>
+  </dialog>
+</body>
+</html>
