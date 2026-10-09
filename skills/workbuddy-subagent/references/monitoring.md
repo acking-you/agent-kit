@@ -12,10 +12,19 @@ Open the returned URL in the host's browser panel. In Codex, use `open_in_codex`
 - Expandable tool arguments and results, plus Edit/Write change previews. A preview is a tool request; only a successful tool result marks it as applied. Parent acceptance tests are still required.
 - Filters for replies, tools and changes, and a follow-output toggle. Scrolling upward with the wheel or keyboard pauses following.
 - Failed validation, interrupted runners and disconnected monitoring as distinct states.
+- A sanitized activity phase and last-event age, including when the model is thinking without publishing a new reply or tool call. Thinking content remains private.
 
 Text is displayed literally; Markdown and HTML are not executed. Thinking blocks and internal authentication metadata are excluded from the browser projection. Tool arguments and results can still contain private task data. Individual displayed fields are capped at 60,000 characters with an explicit truncation note; the private JSONL log remains the complete source.
 
 The browser reconnects automatically while the server remains available. Each connection reconstructs a fresh snapshot from complete persisted JSONL lines, then sends updates over SSE. The browser replaces its snapshot on reconnect, so it does not rely on a lossy in-memory event backlog. Refreshing restores the selected turn from the URL fragment. Restarting the server changes its port and private URL; reopen the URL returned by `monitor start`.
+
+## Language and appearance
+
+Use the panel's language and appearance selectors to choose System / English / Simplified Chinese and System / Light / Dark. Both default to System. Language uses the browser's preferred languages (Chinese and English are supported; English is the fallback). Theme follows the operating system's color-scheme preference. While System is selected, changes to browser language or system theme are applied without reloading.
+
+Manual choices take precedence and are saved in local browser storage. Switching either setting preserves the selected turn, transcript, filters, expanded tools and scroll position. UI labels are translated; task titles, model IDs, paths, assistant replies, tool content and raw diagnostics retain their original text. Skill instructions and developer documentation remain in English.
+
+Browser storage is origin-bound: saved choices survive page reloads on the same host and port, but a server restart on a different port starts with System defaults. If storage is disabled or contains invalid values, the panel safely uses System defaults.
 
 ## Commands and storage
 

@@ -154,6 +154,7 @@ class Projection:
         self.streamed = set()
         self.envelope_indexes = {}
         self.envelope_counter = 0
+        self.activity = {"phase": "waiting", "last_event_at": None, "events": 0}
 
     def put(self, key, **values):
         card = self.cards.setdefault(key, {"id": key})
@@ -214,6 +215,8 @@ class Projection:
     def accept(self, item):
         if not isinstance(item, dict):
             return
+        self.activity = dict(self.activity, last_event_at=item.get("__timestamp") or self.activity["last_event_at"],
+                             events=self.activity["events"] + 1)
         kind = item.get("type")
         message = item.get("message") or {}
         mid = str(item.get("_messageId") or message.get("id") or self.message_id)
@@ -237,6 +240,9 @@ class Projection:
                     self.tool(block, partial=True)
             elif typ == "content_block_delta":
                 delta = event.get("delta") or {}
+                phase = {"thinking_delta": "thinking", "text_delta": "writing", "input_json_delta": "tool_input"}.get(delta.get("type"))
+                if phase:
+                    self.activity["phase"] = phase
                 if delta.get("type") == "text_delta":
                     self.streamed.add(mid)
                     previous = self.text_blocks.get(mid, {}).get(index, "")
@@ -262,16 +268,18 @@ class Projection:
                 if block.get("type") == "tool_use":
                     self.tool(block)
                 elif block.get("type") == "tool_result":
+                    self.activity["phase"] = "tool_result"
                     self.put("tool:" + str(block.get("tool_use_id")), kind="tool",
                              state="failed" if block.get("is_error") else "succeeded",
                              result=public_content(block.get("content")))
         elif kind == "result":
+            self.activity["phase"] = "finished"
             self.final = {"text": clipped(item.get("result", "")), "subtype": item.get("subtype"),
                           "turns": item.get("num_turns"), "models": list(item.get("modelUsage", {})),
                           "errors": clipped(item.get("errors", [])), "permission_denials": len(item.get("permission_denials") or [])}
 
     def snapshot(self):
-        return {"cards": list(self.cards.values()), "model": self.model, "final": self.final}
+        return {"cards": list(self.cards.values()), "model": self.model, "final": self.final, "activity": self.activity}
 
 
 class Tail:
@@ -356,8 +364,10 @@ class Handler(BaseHTTPRequestHandler):
         elif route == "runs":
             runs = [run_info(p) for p in (self.server.root / "runs").glob("*.json")]
             self.reply(sorted((r for r in runs if r.get("id")), key=lambda r: r.get("started", 0), reverse=True))
-        elif route in ("", "app.js", "style.css"):
-            name, mime = {"": ("index.html", "text/html; charset=utf-8"), "app.js": ("app.js", "text/javascript; charset=utf-8"), "style.css": ("style.css", "text/css; charset=utf-8")}[route]
+        elif route in ("", "app.js", "preferences.js", "style.css"):
+            name, mime = {"": ("index.html", "text/html; charset=utf-8"), "app.js": ("app.js", "text/javascript; charset=utf-8"),
+                          "preferences.js": ("preferences.js", "text/javascript; charset=utf-8"),
+                          "style.css": ("style.css", "text/css; charset=utf-8")}[route]
             self.reply((ASSETS / name).read_bytes(), mime)
         elif route.startswith("events/"):
             ident = route.split("/", 1)[1]
@@ -381,6 +391,7 @@ class Handler(BaseHTTPRequestHandler):
         initial = True
         last_info = None
         last_final = None
+        last_activity = None
         last_ping = time.monotonic()
         try:
             while not self.server.stopping.is_set():
@@ -400,11 +411,12 @@ class Handler(BaseHTTPRequestHandler):
                 if initial or reset:
                     self.event("snapshot", dict(projection.snapshot(), run=public_info))
                     initial = False
-                elif projection.changed or public_info != last_info or projection.final != last_final:
+                elif projection.changed or public_info != last_info or projection.final != last_final or projection.activity != last_activity:
                     self.event("update", {"cards": list(projection.changed.values()), "model": projection.model,
-                                          "final": projection.final, "run": public_info})
+                                          "final": projection.final, "run": public_info, "activity": projection.activity})
                 projection.changed.clear()
                 last_info, last_final = public_info, projection.final
+                last_activity = projection.activity
                 if info.get("status") not in ACTIVE:
                     self.event("done", {})
                     return

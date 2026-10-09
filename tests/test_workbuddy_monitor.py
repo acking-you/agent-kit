@@ -38,7 +38,10 @@ class ProjectionTests(unittest.TestCase):
 
     def test_thinking_and_private_metadata_never_projected(self):
         p = monitor.Projection()
-        p.accept(partial('m','content_block_delta',delta={'type':'thinking_delta','thinking':'PRIVATE_THOUGHT'}))
+        event = partial('m','content_block_delta',delta={'type':'thinking_delta','thinking':'PRIVATE_THOUGHT'})
+        event['__timestamp'] = '2026-10-09T08:28:46Z'
+        p.accept(event)
+        self.assertEqual(p.snapshot()['activity'], {'phase':'thinking','last_event_at':'2026-10-09T08:28:46Z','events':1})
         event = message('m', {'type':'thinking','thinking':'PRIVATE_THOUGHT'}, {'type':'text','text':'Public answer'})
         event['_meta'] = {'credential':'PRIVATE_KEY'}
         p.accept(event)
@@ -147,6 +150,14 @@ class ServerTests(unittest.TestCase):
             with self.assertRaises(HTTPError) as error: self.client.open(request)
             self.assertEqual(error.exception.code,code)
             error.exception.close()
+
+    def test_preference_bootstrap_is_served_under_the_private_url(self):
+        with self.client.open(self.base+'preferences.js') as response:
+            self.assertEqual(response.headers.get_content_type(), 'text/javascript')
+            self.assertIn(b'WorkBuddyPreferences', response.read())
+        with self.client.open(self.base) as response:
+            html = response.read().decode()
+            self.assertLess(html.index('src="preferences.js"'), html.index('href="style.css"'))
 
     def test_final_append_between_log_poll_and_status_read_is_not_lost(self):
         log=self.root/'race.jsonl'; log.write_text('')
