@@ -3,6 +3,7 @@ import io
 import json
 import os
 from pathlib import Path
+import plistlib
 import signal
 import subprocess
 import sys
@@ -20,6 +21,97 @@ spec.loader.exec_module(wb)
 
 
 class WorkBuddyTests(unittest.TestCase):
+    def test_relative_runtime_paths_stay_bound_when_child_cwd_changes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp).resolve()
+            app = root / 'app'
+            (app / 'Contents').mkdir(parents=True)
+            (app / 'Contents/Info.plist').write_bytes(plistlib.dumps({'CFBundleExecutable': 'WorkBuddy'}))
+            (root / 'cli').write_text('fake CLI')
+            data = root / 'data'
+            (data / 'cache').mkdir(parents=True)
+            product = data / 'cache/acc-product-config-v3.json'
+            product.write_text('{}')
+            home = root / 'home'
+            (home / '.workbuddy-subagent').mkdir(parents=True)
+            (home / '.workbuddy-subagent/config.json').write_text(json.dumps({
+                'native_bootstrap_consent': True, 'workbuddy_data_dir': str(data)}))
+            other = root / 'other'
+            other.mkdir()
+            previous = Path.cwd()
+            try:
+                os.chdir(root)
+                for override in ({}, {'ACC_PRODUCT_CONFIG_PATH': 'data/cache/acc-product-config-v3.json'}):
+                    with self.subTest(override=override), patch.dict(os.environ, {
+                        'WORKBUDDY_HOME': 'app', 'WORKBUDDY_CLI_PATH': 'cli',
+                        'WORKBUDDY_NODE': 'node-relative', 'WORKBUDDY_DATA_DIR': 'data', **override
+                    }, clear=True), patch.object(Path, 'home', return_value=home), patch.object(wb.sys, 'platform', 'darwin'):
+                        command, env, info = wb.runtime()
+                    self.assertTrue(info['native_bootstrap_enabled'])
+                    self.assertTrue(all(Path(value).is_absolute() for value in command))
+                    probe = 'import os,json; from pathlib import Path; print(json.dumps([str(Path(os.environ[k]).resolve()) for k in ("WORKBUDDY_DATA_DIR","CODEBUDDY_CONFIG_DIR","WORKBUDDY_CONFIG_DIR","ACC_PRODUCT_CONFIG_PATH")]))'
+                    resolved = subprocess.check_output([sys.executable, '-c', probe], cwd=other, env=env, text=True)
+                    self.assertEqual(json.loads(resolved), [str(data)] * 3 + [str(product)])
+            finally:
+                os.chdir(previous)
+
+    def test_run_omits_turn_cap_unless_explicit_and_keeps_high_effort(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            brief = root / 'brief.txt'
+            brief.write_text('Test prompt')
+            fake = root / 'cli.py'
+            fake.write_text('import json,sys; print(json.dumps(dict(type="result",subtype="success",is_error=False,result=json.dumps(dict(argv=sys.argv[1:],prompt=sys.stdin.read())),modelUsage={"test-model":{}})))')
+            for cap in (None, 50):
+                argv = [str(SCRIPT), 'run', '--cwd', tmp, '--prompt-file', str(brief),
+                        '--model', 'test-model', '--no-monitor']
+                if cap is not None:
+                    argv += ['--max-turns', str(cap)]
+                with self.subTest(cap=cap), patch.object(sys, 'argv', argv), \
+                     patch.object(wb, 'runtime', return_value=([sys.executable, str(fake)], os.environ.copy(), {})), \
+                     patch.object(wb, 'catalog', return_value=['test-model']), patch.object(wb, 'emit') as emit:
+                    self.assertEqual(wb.main(), 0)
+                result = json.loads(emit.call_args.args[0]['result'])
+                self.assertEqual(result['prompt'], 'Test prompt')
+                flags = result['argv']
+                self.assertEqual(flags[flags.index('--effort') + 1], 'high')
+                if cap is None:
+                    self.assertNotIn('--max-turns', flags)
+                else:
+                    self.assertEqual(flags[flags.index('--max-turns') + 1], str(cap))
+
+    def test_explicit_nonpositive_turn_cap_fails_before_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            brief = Path(tmp) / 'brief.txt'
+            brief.write_text('Test')
+            for cap in ('0', '-1'):
+                argv = [str(SCRIPT), 'run', '--cwd', tmp, '--prompt-file', str(brief),
+                        '--model', 'test-model', '--no-monitor', '--max-turns', cap]
+                with self.subTest(cap=cap), patch.object(sys, 'argv', argv), \
+                     patch.object(wb, 'runtime', return_value=([], {}, {})), patch.object(wb, 'catalog') as catalog:
+                    with self.assertRaises(wb.WorkBuddyError):
+                        wb.main()
+                    catalog.assert_not_called()
+
+    def test_saved_result_requires_and_validates_exact_model_offline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / 'result.jsonl'
+            base = [sys.executable, str(SCRIPT), 'result', str(log)]
+            log.write_text(json.dumps(dict(type='result', subtype='success', is_error=False,
+                                          result='Done', modelUsage={'test-model': {}})))
+            missing = subprocess.run(base, capture_output=True, text=True)
+            self.assertEqual(missing.returncode, 2)
+            for requested in ('auto', 'claude', 'gpt', 'frontier', 'other-model', 'test-model'):
+                with self.subTest(requested=requested):
+                    result = subprocess.run(base + ['--model', requested], capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 0 if requested == 'test-model' else 1)
+            for reported in ({}, {'auto': {}}, {'other-model': {}}):
+                log.write_text(json.dumps(dict(type='result', subtype='success', is_error=False,
+                                              result='Done', modelUsage=reported)))
+                with self.subTest(reported=reported):
+                    result = subprocess.run(base + ['--model', 'test-model'], capture_output=True, text=True)
+                    self.assertEqual(result.returncode, 1)
+
     def test_consent_is_bound_to_the_workbuddy_data_directory(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); config=root/'config.json'; data=root/'data'

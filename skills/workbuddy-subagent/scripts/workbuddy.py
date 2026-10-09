@@ -53,19 +53,22 @@ def private_stderr(output=None):
 
 
 def runtime():
-    app = Path(os.environ.get("WORKBUDDY_HOME", "/Applications/WorkBuddy.app")).expanduser()
+    app = Path(os.environ.get("WORKBUDDY_HOME", "/Applications/WorkBuddy.app")).expanduser().resolve()
     cli = Path(os.environ.get("WORKBUDDY_CLI_PATH", str(
-        app / "Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"))).expanduser()
+        app / "Contents/Resources/app.asar.unpacked/cli/bin/codebuddy"))).expanduser().resolve()
     node = os.environ.get("WORKBUDDY_NODE") or shutil.which("node")
-    data = Path(os.environ.get("WORKBUDDY_DATA_DIR", str(Path.home() / ".workbuddy"))).expanduser()
+    if node:
+        node = str(Path(shutil.which(node) or node).expanduser().resolve())
+    data = Path(os.environ.get("WORKBUDDY_DATA_DIR", str(Path.home() / ".workbuddy"))).expanduser().resolve()
     product = Path(os.environ.get("ACC_PRODUCT_CONFIG_PATH", str(
-        data / "cache/acc-product-config-v3.json"))).expanduser()
+        data / "cache/acc-product-config-v3.json"))).expanduser().resolve()
     if not node or not cli.is_file():
         raise WorkBuddyError("Bundled CLI or Node.js missing; set WORKBUDDY_HOME, WORKBUDDY_CLI_PATH or WORKBUDDY_NODE.")
     if not product.is_file():
         raise WorkBuddyError("WorkBuddy product config missing. Open and sign in to the desktop app first.")
     env = os.environ.copy()
-    env.update(CODEBUDDY_CONFIG_DIR=str(data), WORKBUDDY_CONFIG_DIR=str(data),
+    env.update(WORKBUDDY_HOME=str(app), WORKBUDDY_DATA_DIR=str(data),
+               CODEBUDDY_CONFIG_DIR=str(data), WORKBUDDY_CONFIG_DIR=str(data),
                ACC_PRODUCT_CONFIG_PATH=str(product), CODEBUDDY_HOST="workbuddy-desktop",
                CODEBUDDY_FORCE_HEADLESS_BUNDLE="1",
                CLIENT_INFO_PLATFORM="WorkBuddy", CLIENT_INFO_IDE_TYPE="WorkBuddy",
@@ -199,11 +202,16 @@ def _catalog(command, env, cwd, timeout, diagnostics):
                 signal.signal(signal.SIGTERM, previous)
 
 
-def select_model(ids, requested):
+def require_exact_model(requested):
     # Capability cannot be inferred from a permanent brand suffix or version sort.
     # The parent resolves the current provider flagship using docs + this catalog.
     if not requested or requested in ("frontier", "gpt", "claude", "auto"):
         raise WorkBuddyError("Pass --model EXACT_ID after checking current vendor guidance and the WorkBuddy catalog; family aliases do not identify the strongest model.")
+    return requested
+
+
+def select_model(ids, requested):
+    require_exact_model(requested)
     if requested not in ids:
         raise WorkBuddyError(f"Requested model is absent from the local catalog: {requested}")
     return requested
@@ -337,7 +345,7 @@ def main():
     run.add_argument("--permission-mode", choices=["plan", "dontAsk", "acceptEdits"], default="plan")
     run.add_argument("--tools", default="Read,Glob,Grep", help="Empty disables tools; default is read-only")
     run.add_argument("--effort", choices=["low", "medium", "high", "xhigh", "max"], default="high")
-    run.add_argument("--max-turns", type=int, default=20)
+    run.add_argument("--max-turns", type=int, help="Optional explicit agentic-turn cap; omitted by default")
     run.add_argument("--timeout", type=int, default=0, help="Seconds; 0 waits until completion (use host execution sessions)")
     run.add_argument("--output", help="Stream native output into a NEW private local file")
     run.add_argument("--title", help="Short title shown in the local monitoring panel")
@@ -347,6 +355,7 @@ def main():
     monitor_cli.add_argument("--state-dir")
     result = sub.add_parser("result")
     result.add_argument("log", help="Native JSON output or background log path")
+    result.add_argument("--model", required=True, help="Exact model ID recorded for this session")
     cli = sub.add_parser("cli", help="Native job commands, using WorkBuddy's environment")
     cli.add_argument("args", nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -354,7 +363,8 @@ def main():
         import monitor
         return monitor.main([args.action] + (["--state-dir", args.state_dir] if args.state_dir else []))
     if args.command == "result":
-        value, ok = checked_result(Path(args.log).read_text(errors="replace"))
+        model = require_exact_model(args.model)
+        value, ok = checked_result(Path(args.log).read_text(errors="replace"), expected_model=model)
         emit(value)
         return 0 if ok else 1
     command, env, info = runtime()
@@ -372,8 +382,8 @@ def main():
               "note": "This catalog is unranked. Resolve the current strongest Claude/GPT using vendor guidance, then pass its exact ID. Catalog presence does not verify inference access."})
         return 0
     prompt = sys.stdin.read() if args.prompt_file == "-" else Path(args.prompt_file).read_text()
-    if not prompt.strip() or args.max_turns < 1 or args.timeout < 0:
-        raise WorkBuddyError("Provide a nonempty prompt, a positive turn limit and a nonnegative timeout.")
+    if not prompt.strip() or (args.max_turns is not None and args.max_turns < 1) or args.timeout < 0:
+        raise WorkBuddyError("Provide a nonempty prompt, a positive turn limit if specified, and a nonnegative timeout.")
     if args.output and Path(args.output).exists():
         raise WorkBuddyError("Output already exists; choose a new path before starting this task.")
     model = select_model(catalog(command, env, cwd), args.model)
@@ -391,7 +401,9 @@ def main():
         monitor_url += "#" + record.id
     flags = ["-p", "--output-format", "stream-json", "--verbose", "--include-partial-messages",
              "--permission-mode", args.permission_mode, "--tools", args.tools,
-             "--effort", args.effort, "--max-turns", str(args.max_turns)] + isolated_flags()
+             "--effort", args.effort] + isolated_flags()
+    if args.max_turns is not None:
+        flags += ["--max-turns", str(args.max_turns)]
     flags += ["--model", model]
     flags += ["--resume" if args.resume else "--session-id", session]
     emit({"session_id": session, "model": model,

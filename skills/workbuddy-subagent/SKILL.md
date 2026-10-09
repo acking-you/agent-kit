@@ -46,7 +46,7 @@ Set `CLAUDE_MODEL` and `GPT_MODEL` below to those resolved IDs.
 
 The external model does not inherit this chat. Write a UTF-8 brief with the objective, context (including repository instructions and user constraints), allowed workspace/files, acceptance criteria and requested output. Ask for findings, assumptions, evidence and open questions, not hidden reasoning. Templates: [example briefs](references/model-policy.md#example-briefs).
 
-Defaults: `--effort high`, `--timeout 0` (no imposed deadline), `--max-turns 20`, tools `Read,Glob,Grep` in `plan` permission mode. Hooks, inherited MCP servers and project/local CLI settings are excluded; put needed context in the brief.
+Defaults: `--effort high`, `--timeout 0` (no imposed deadline), no imposed turn limit, tools `Read,Glob,Grep` in `plan` permission mode. Set `--max-turns` only when the user explicitly requests a cap. Hooks, inherited MCP servers and project/local CLI settings are excluded; put needed context in the brief.
 
 Discussion of supplied text: disable tools.
 
@@ -93,12 +93,14 @@ python3 "$SKILL_DIR/scripts/workbuddy.py" run \
 
 Never use `--continue` or send overlapping turns to one session. For an independent opinion, start a new session.
 
-For long runs, launch through the host's persistent execution-session tool and keep its handle. For long waits in Codex, add a thread heartbeat (normally five minutes), save a checkpoint (handle, session ID, log, remaining work, criteria, authorization limits) and yield. Stay quiet while nothing changes. When the run ends, finish already-authorized validation and delivery, then pause the heartbeat. Without persistent execution support, state that limitation instead of promising unattended work. Do not rely on `--bg` or `agents --jobs`; they are unverified.
+For long runs, launch through the host's persistent execution-session tool and keep its handle. For long waits in Codex, add a thread heartbeat (normally five minutes), save a checkpoint (handle, session ID, log, remaining work, criteria, authorization limits) and yield. At each check, inspect sanitized activity, public output, relevant file changes and progress toward acceptance. Let useful work continue; intervene for repeated failures, unproductive repetition, scope drift or user direction. Quiet thinking alone is not a failure. To change direction, stop the runner through its execution handle, wait for exit and inspect side effects before resuming. The monitor only observes; it cannot steer or cancel a running turn.
+
+Stay quiet while nothing changes. When the run ends, finish already-authorized validation and delivery, then pause the heartbeat. Do not replace supervision with a fixed turn cap or blind retries. Without persistent execution support, state that limitation instead of promising unattended work. Do not rely on `--bg` or `agents --jobs`; they are unverified.
 
 ## Verify
 
 ```bash
-python3 "$SKILL_DIR/scripts/workbuddy.py" result /absolute/task/turn-2.jsonl
+python3 "$SKILL_DIR/scripts/workbuddy.py" result /absolute/task/turn-2.jsonl --model "$SESSION_MODEL"
 ```
 
 Completion requires a successful nonempty final result, the requested reported model, no errors or permission denials, and the parent's own acceptance checks (tests, diff review). The helper exits nonzero on missing results, authentication errors, time/turn limits and cancellation. On failure, keep the diagnostic and stop dependent work. Do not retry blindly, downgrade the model, export credentials or disable encryption; see [authentication failures](references/compatibility.md#authentication-failures).

@@ -6,7 +6,7 @@ A small collection of skills and prompts. Copy one instruction below into your a
 
 ### WorkBuddy subagent
 
-Resumable Claude and GPT sessions through WorkBuddy's bundled CLI, with a local live Markdown monitor. Requires WorkBuddy, an existing login, Python 3.9+ and Node.js 18.20.8+; automatic discovery and native login initialization are currently validated on macOS.
+Resumable Claude and GPT sessions through WorkBuddy's bundled CLI, with a local live Markdown monitor. Runs at high effort with no imposed turn limit by default; the parent agent periodically checks progress and decides when to intervene. Requires WorkBuddy, an existing login, Python 3.9+ and Node.js 18.20.8+; automatic discovery and native login initialization are currently validated on macOS.
 
 ```text
 Install workbuddy-subagent from https://github.com/acking-you/myclaude-skills/tree/main/skills/workbuddy-subagent into your supported global skill directory. Fetch the complete folder, including scripts, references and assets. Inspect the instructions, preserve local customizations and machine-local settings, and never import credentials or another installation's consent. Follow references/compatibility.md for native login: reuse this installation's existing authorization; ask only if authorization is missing. Keep authorization outside the skill at ~/.workbuddy-subagent/config.json, bound to the local WorkBuddy data directory. Verify skill discovery and runtime/model availability, then report the installed path and any remaining setup; do not call a model just to prove installation.

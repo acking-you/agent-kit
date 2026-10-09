@@ -33,6 +33,6 @@ These manage only the observer; `monitor stop` never stops, resumes or instructs
 ## Recovery
 
 - If monitor startup fails, no task is launched; run `monitor serve` in the foreground for diagnostics.
-- A disconnected panel is not a reason to rerun the model. Run `monitor start`, then check the session with `result`.
+- A disconnected panel is not a reason to rerun the model. Run `monitor start`, then check the saved log with `result LOG --model EXACT_ID`, using the session's recorded model.
 - A dead runner is marked interrupted, never successful. Inspect workspace side effects before resuming.
 - After updating the skill, if an old observer is still serving, run `monitor stop`, then `monitor start`, and reopen the URL.

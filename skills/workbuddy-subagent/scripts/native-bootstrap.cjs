@@ -66,6 +66,15 @@ function connectAndDeliver(socketPath, message, deadline) {
   });
 }
 
+function terminateChild(child, grace = 5000) {
+  if (!child?.pid || child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
+  return new Promise(resolve => {
+    const timer = setTimeout(() => child.kill('SIGKILL'), grace);
+    child.once('exit', () => { clearTimeout(timer); resolve(); });
+    child.kill('SIGTERM');
+  });
+}
+
 async function main() {
   if (process.env.WORKBUDDY_NATIVE_BOOTSTRAP !== '1') throw new Error('Native bootstrap requires explicit opt-in');
   const [node, cli, ...args] = process.argv.slice(2);
@@ -100,8 +109,9 @@ async function main() {
     delete env.ELECTRON_RUN_AS_NODE;
     delete env.WORKBUDDY_NATIVE_BOOTSTRAP;
     child = spawn(node, [cli, ...args], { env, stdio: 'inherit' });
-    const exited = new Promise((resolve, reject) => {
-      child.once('error', reject);
+    const exited = new Promise(resolve => {
+      // A failed spawn must not create an unhandled rejection while IPC is pending.
+      child.once('error', () => resolve(1));
       child.once('exit', (code, signal) => resolve(code ?? (signal ? 128 : 1)));
     });
     for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => {
@@ -114,7 +124,7 @@ async function main() {
     delete payload.bootstrap;
     process.exitCode = await exited;
   } catch (error) {
-    if (child && child.exitCode === null) child.kill('SIGTERM');
+    await terminateChild(child);
     throw error;
   } finally { cleanup(); }
 }
@@ -125,4 +135,4 @@ if (require.main === module) main().catch(() => {
   process.exitCode = 1;
 });
 
-module.exports = { connectAndDeliver };
+module.exports = { connectAndDeliver, terminateChild };
