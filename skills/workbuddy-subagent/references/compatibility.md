@@ -13,7 +13,7 @@ Optional overrides: `WORKBUDDY_HOME`, `WORKBUDDY_CLI_PATH`, `WORKBUDDY_NODE`, `W
 
 The Python helper reads the product network environment and the application's version for startup context. It sets WorkBuddy's product identity and forces the headless bundle because recent desktop packages can omit the full TUI bundle. It does not print stored login credentials.
 
-Model discovery uses a short-lived native ACP connection (`initialize`, `session/new`) without sending a model prompt. Task execution uses `--print --output-format stream-json`; continuation uses `--resume SESSION_ID`. No third-party bridge dependency is required.
+Model discovery uses a short-lived native ACP connection (`initialize`, `session/new`) without sending a model prompt. Task execution uses `--print --output-format stream-json`; continuation uses `--resume SESSION_ID --model EXACT_ID`. No third-party bridge dependency is required.
 
 ## Authentication
 
@@ -37,16 +37,25 @@ An error such as `Authentication required` or HTTP 401 must be treated as failur
 2. If the desktop works but independently launched CLI inference fails, check whether native credential bootstrap is enabled and authorized. Relogging repeatedly is not a justified fix for missing bootstrap.
 3. Do not disable encryption, scrape process tokens, export keys or tokens, change the account's credential storage, or claim that model discovery validates inference.
 
-## Observed on macOS, 2026-10-08
+## Verified on macOS, 2026-10-09
 
 WorkBuddy 5.7.6 bundled CLI 2.156.0:
 
 - Runtime discovery, ACP initialization and model catalog enumeration succeeded.
-- Real print-mode GPT-6 Astra requests failed with `Authentication required`. A separate ACP prompt failed with the same authentication category.
-- The user confirmed that the desktop could still reply normally. The running desktop used credential-field encryption; independent CLI startup did not receive the desktop bootstrap. This is evidence of an integration gap, not proof that the account itself is logged out.
-- `--bg` acknowledged a launch but produced an empty log. `agents --jobs` reported `No mapping found: POST /internal/agents`. Without the headless override, that command also tried to load the omitted full CLI bundle.
+- With explicitly authorized native bootstrap, `gpt-6-astra` completed a correctness review and `claude-opus-5.5` drafted a technical-blog opening. Both produced successful final results with no permission denials; the stream reported the requested model IDs. No tools were called during these text-only tasks.
+- A fresh CLI process resumed the Astra conversation and recalled a marker supplied only in the first turn, together with the earlier bug. The successful retest explicitly pinned `gpt-6-astra` and verified the reported model.
+- A fresh process resumed Opus, recalled its original article title and concrete example, and proposed two frontend layouts with waiting, failed and verified states plus an accessibility consideration. The reported model remained `claude-opus-5.5`.
+- Astra used `Read` and `Edit` to fix a temporary Python word counter. The parent independently passed nine empty-input, whitespace, mixed-separator and Unicode cases. The tool trace showed only those two tools, targeting the assigned file.
+- The global skill also worked with consent saved in its local `user-config.json`, without an environment opt-in on each invocation. Task logs were created with mode `0600`.
 
-Therefore end-to-end model replies, resumed conversation recall, and editing through this skill are **not verified on that installation**. Report these limits until a real smoke test passes. Do not reuse success from an older WorkBuddy version as proof for an updated one.
+Two integration issues were reproduced and handled:
+
+1. Before native bootstrap, both print-mode inference and an ACP prompt failed with `Authentication required` while the desktop worked. Supplying WorkBuddy's native credential initialization resolved actual inference; repeated desktop login was unnecessary.
+2. Native `--resume` without `--model` recalled history but reported `auto` instead of the previous Astra model. The helper now requires an exact model ID on resume and rejects successful outputs whose reported model does not match the request.
+
+The stream's initial `tools` list describes the registered inventory, not the effective `--tools` filter. The installed source applies that filter when enabling tools. Inspect actual tool-use events when validating behavior.
+
+During initial diagnostics, `--bg` acknowledged a launch but produced an empty log; `agents --jobs` reported `No mapping found: POST /internal/agents`. Without the headless override, that command also tried to load the omitted full CLI bundle. Native background jobs remain unverified; the validated workflow uses host execution sessions and explicit CLI resumption. Do not reuse these results as proof for a newer WorkBuddy build.
 
 ## Long-running work
 

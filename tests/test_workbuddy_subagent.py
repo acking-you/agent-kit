@@ -31,6 +31,33 @@ class WorkBuddyTests(unittest.TestCase):
         with self.assertRaises(wb.WorkBuddyError):
             wb.select_model(["claude-opus-5.5"], "claude-opus-5-5")
 
+    def test_resume_requires_exact_model(self):
+        for model in (None, "gpt", "claude", "frontier"):
+            with self.assertRaises(wb.WorkBuddyError):
+                wb.requested_model("execute", model, "existing-session")
+
+    def test_resume_keeps_explicit_model_over_profile(self):
+        self.assertEqual(wb.requested_model("writing", "gpt-6-astra", "existing-session"), "gpt-6-astra")
+
+    def test_task_profiles_route_to_preferred_families(self):
+        for profile in ("design", "writing", "brainstorm"):
+            self.assertEqual(wb.requested_model(profile, None, None), "claude")
+        for profile in ("review", "execute"):
+            self.assertEqual(wb.requested_model(profile, None, None), "gpt")
+
+    def test_reported_auto_model_is_not_requested_astra(self):
+        raw = json.dumps(dict(type="result", subtype="success", is_error=False,
+                             result="Answer", modelUsage={"auto": {}}))
+        with self.assertRaises(wb.WorkBuddyError):
+            wb.checked_result(raw, expected_model="gpt-6-astra")
+
+    def test_reported_model_matches_request(self):
+        raw = json.dumps(dict(type="result", subtype="success", is_error=False,
+                             result="Answer", modelUsage={"gpt-6-astra": {}}))
+        value, ok = wb.checked_result(raw, expected_model="gpt-6-astra")
+        self.assertTrue(ok)
+        self.assertEqual(value["reported_models"], ["gpt-6-astra"])
+
     def result(self, **changes):
         value = dict(type="result", subtype="success", is_error=False, result="Verified answer", session_id="test")
         value.update(changes)

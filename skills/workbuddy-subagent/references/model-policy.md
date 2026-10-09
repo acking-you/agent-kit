@@ -13,7 +13,7 @@ As checked on 2026-10-08:
 1. Honor an explicit model ID or family requested by the user.
 2. For a new session, choose the family matching the task profile.
 3. Within that family, prefer the highest available numeric version. Prefer the ordinary ID over a `-1m` variant of the same version unless the user requests the variant.
-4. Keep an existing session's model on resume unless deliberately switching it.
+4. Pass the existing session's exact model ID on resume unless deliberately switching it. Omitting `--model` can reset the native CLI to `auto`; the helper rejects an omitted ID or a family alias on resume.
 5. If the required family is absent or inference fails, report the actual cause. Choose another family only when the task or user preference warrants it, not to hide an error.
 
 Model catalogs evolve. Check official guidance when asked for the latest/strongest family; do not assume an unknown future suffix is more capable because it sorts last. The automatic selector recognizes Astra and Opus only. New families can be selected by exact ID after checking availability and suitability.

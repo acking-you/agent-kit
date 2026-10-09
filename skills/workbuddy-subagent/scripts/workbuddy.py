@@ -151,6 +151,12 @@ def select_model(ids, requested):
     raise WorkBuddyError("No preferred flagship found. Inspect models and explicitly choose a model; no automatic downgrade.")
 
 
+def requested_model(profile, override, resume):
+    if resume and (not override or override in ("frontier", "gpt", "claude")):
+        raise WorkBuddyError("Resume requires --model EXACT_ID from the previous turn; this CLI otherwise resets to auto.")
+    return override or ("claude" if profile in ("design", "writing", "brainstorm") else "gpt")
+
+
 def json_values(text):
     """Native logs can interleave pretty JSON, NDJSON and terminal messages."""
     text = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", text)
@@ -169,8 +175,9 @@ def json_values(text):
             pos += 1
 
 
-def checked_result(text):
-    results = [v for v in json_values(text) if isinstance(v, dict) and v.get("type") == "result"]
+def checked_result(text, expected_model=None):
+    events = [v for v in json_values(text) if isinstance(v, dict)]
+    results = [v for v in events if v.get("type") == "result"]
     if not results:
         raise WorkBuddyError("No final JSON result yet. A started/idle/exited job is not proof of success; inspect jobs/logs.")
     result = results[-1]
@@ -179,8 +186,14 @@ def checked_result(text):
           and not result.get("errors") and not meta_error
           and not result.get("permission_denials")
           and bool(result.get("result", "").strip() or result.get("structured_output")))
-    return {key: result[key] for key in ("session_id", "result", "subtype", "is_error",
-            "errors", "structured_output", "permission_denials", "num_turns") if key in result}, ok
+    reported = set(result.get("modelUsage", {})) or {
+        v["model"] for v in events if v.get("type") == "system" and v.get("subtype") == "init" and v.get("model")}
+    if ok and expected_model and reported != {expected_model}:
+        raise WorkBuddyError("Reported model differs from the requested model or is missing; inspect the saved transcript.")
+    value = {key: result[key] for key in ("session_id", "result", "subtype", "is_error",
+            "errors", "structured_output", "permission_denials", "num_turns") if key in result}
+    value["reported_models"] = sorted(reported)
+    return value, ok
 
 
 def emit(value):
@@ -287,23 +300,21 @@ def main():
         raise WorkBuddyError("Provide a nonempty prompt, a positive turn limit and a nonnegative timeout.")
     if args.output and Path(args.output).exists():
         raise WorkBuddyError("Output already exists; choose a new path before starting this task.")
-    family = "claude" if args.profile in ("design", "writing", "brainstorm") else "gpt"
-    requested = args.model or (None if args.resume else family)
-    model = select_model(catalog(command, env, cwd), requested) if requested else None
+    requested = requested_model(args.profile, args.model, args.resume)
+    model = select_model(catalog(command, env, cwd), requested)
     session = args.resume or str(uuid.uuid4())
     flags = ["-p", "--output-format", "stream-json", "--verbose",
              "--permission-mode", args.permission_mode, "--tools", args.tools,
              "--effort", args.effort, "--max-turns", str(args.max_turns)] + isolated_flags()
-    if model:
-        flags += ["--model", model]
+    flags += ["--model", model]
     flags += ["--resume" if args.resume else "--session-id", session]
     # End option parsing: prompt files may contain leading dashes or shell syntax.
     flags += ["--", prompt]
-    emit({"session_id": session, "model": model or "preserve resumed session model",
+    emit({"session_id": session, "model": model,
           "profile": args.profile, "cwd": str(cwd), "output": args.output})
     sys.stdout.flush()
     code, stdout = run_task(command, env, cwd, flags, args.output, args.timeout)
-    result, ok = checked_result(stdout)
+    result, ok = checked_result(stdout, expected_model=model)
     emit(result)
     if code or not ok:
         print("WorkBuddy task failed or is incomplete. For auth errors, first check desktop login. If desktop works, this CLI may lack its credential bootstrap; see references/compatibility.md. Do not silently change models.", file=sys.stderr)

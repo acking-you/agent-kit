@@ -25,7 +25,7 @@ These are the user's workflow preferences, not universal benchmark claims:
 
 For mixed work, have Opus propose or draft, then ask Astra to check specific correctness claims. Give each a bounded brief; reconcile disagreements using code, tests, and sources. Do not automatically double every trivial task.
 
-An explicit user model choice always wins (`--model EXACT_ID`). A resumed conversation keeps its existing model unless `--model` is supplied; changing `--profile` alone does not switch an existing session. To obtain an independent opinion, create a separate session.
+An explicit user model choice always wins (`--model EXACT_ID`). On resume, always pass the exact model ID recorded for the previous turn. The packaged CLI can reset to `auto` when `--model` is omitted, so the helper rejects that ambiguity. Change the ID only when deliberately switching models. To obtain an independent opinion, create a separate session.
 
 Discover the current catalog before starting work:
 
@@ -76,10 +76,11 @@ Record the printed `session_id`, chosen model, absolute workspace, output path, 
 ```bash
 python3 "$SKILL_DIR/scripts/workbuddy.py" run \
   --cwd /absolute/task/workspace --resume SESSION_ID --tools '' \
+  --model gpt-6-astra \
   --prompt-file /absolute/task/follow-up.txt --output /absolute/task/turn-2.jsonl
 ```
 
-Use a new output path each turn. Never use the ambiguous CLI `--continue` when several tasks exist. Never send overlapping turns to the same session. Keep workspace and tool permissions explicit on every turn.
+Replace `gpt-6-astra` with that session's recorded model ID. Use a new output path each turn. Never use the ambiguous CLI `--continue` when several tasks exist. Never send overlapping turns to the same session. Keep workspace and tool permissions explicit on every turn.
 
 For sustained work, start `run` through the host's persistent execution-session tool, yield promptly, and retain its handle. `--timeout 0` (default) permits a long model turn; `--max-turns` defaults to 20 and may be increased for a scoped task. This does not make the model run forever or resume automatically after an app/machine restart.
 
@@ -93,6 +94,6 @@ WorkBuddy's `--bg`/`agents --jobs` capabilities vary with the packaged CLI. They
 python3 "$SKILL_DIR/scripts/workbuddy.py" result /absolute/task/turn-2.jsonl
 ```
 
-Require a final successful result, nonempty output, no reported errors/permission denials, and the actual task acceptance checks. Missing final output, authentication errors, time/turn limits, and cancelled requests are incomplete work. The helper returns nonzero for these conditions. A subagent's confident answer is not independent validation.
+Require a final successful result, nonempty output, no reported errors/permission denials, and the actual task acceptance checks. `run` also verifies that the CLI's reported model matches the requested ID. Missing final output, authentication errors, time/turn limits, and cancelled requests are incomplete work. The helper returns nonzero for these conditions. A subagent's confident answer is not independent validation.
 
 If model invocation fails, preserve the diagnostic and stop dependent work. Do not retry indefinitely, downgrade the model, export credentials, or disable WorkBuddy credential encryption. Follow [compatibility and troubleshooting](references/compatibility.md). A working desktop and a readable model catalog do not guarantee that independently launched CLI inference works.
