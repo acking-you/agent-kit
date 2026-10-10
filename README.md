@@ -1,6 +1,6 @@
 # Agent Kit
 
-A small collection of skills and prompts. Copy one instruction below into your agent; it handles installation and verifies the result.
+A small collection of skills and prompts. Copy a request below into your agent; skill installation does not run the skill.
 
 ## Skills
 
@@ -9,7 +9,7 @@ A small collection of skills and prompts. Copy one instruction below into your a
 Resumable Claude and GPT sessions through WorkBuddy's bundled CLI, with a local live Markdown monitor. Runs at high effort with no imposed turn limit by default; the parent agent periodically checks progress and decides when to intervene. Requires WorkBuddy, an existing login, Python 3.9+ and Node.js 18.20.8+; automatic discovery and native login initialization are currently validated on macOS.
 
 ```text
-Install the complete workbuddy-subagent folder from https://github.com/acking-you/agent-kit/tree/main/skills/workbuddy-subagent into your global skills directory. Follow SKILL.md and its setup references, preserving local settings and this installation's existing authorization. Confirm skill discovery and run the helper's doctor and models checks. Report the installed path and any remaining setup.
+Install the complete skill at https://github.com/acking-you/agent-kit/tree/main/skills/workbuddy-subagent into your global skills directory without running it.
 ```
 
 ### Technical documentation
@@ -17,7 +17,7 @@ Install the complete workbuddy-subagent folder from https://github.com/acking-yo
 Write evidence-based implementation, architecture and troubleshooting explanations, or make a focused edit without restructuring the rest of a document.
 
 ```text
-Install tech-impl-doc from https://github.com/acking-you/agent-kit/tree/main/skills/tech-impl-doc into your supported global skill directory. Fetch the complete folder, inspect SKILL.md, preserve unrelated skills and local customizations, and verify its name, metadata and discovery. Report the installed path and how to invoke it. Do not create a documentation task during installation.
+Install the complete skill at https://github.com/acking-you/agent-kit/tree/main/skills/tech-impl-doc into your global skills directory without running it.
 ```
 
 ### Grill me
@@ -25,7 +25,7 @@ Install tech-impl-doc from https://github.com/acking-you/agent-kit/tree/main/ski
 Stress-test a plan through one question at a time, with recommendations, until the important decisions are clear. Explicit invocation only; self-contained.
 
 ```text
-Install grill-me from https://github.com/acking-you/agent-kit/tree/main/skills/grill-me into your supported global skill directory. Fetch the complete folder and preserve its explicit-invocation-only policy and unrelated local settings. Verify it works independently without a separate grilling skill, then report the installed path and how to invoke it. Do not start the interview or implement a plan during installation.
+Install the complete skill at https://github.com/acking-you/agent-kit/tree/main/skills/grill-me into your global skills directory without running it.
 ```
 
 ## Prompts
