@@ -19,16 +19,16 @@ Independently launched Node.js cannot read WorkBuddy's encrypted authentication 
 
 Consent:
 
-- Requires the installation owner's explicit authorization. For one invocation, set `WORKBUDDY_NATIVE_BOOTSTRAP=1`.
-- To persist it, create `~/.workbuddy-subagent/config.json` with mode `0600` in a `0700` directory, outside the installed skill. Bind it to the resolved absolute WorkBuddy data directory:
+- The installation owner authorizes it once. For a single invocation, set `WORKBUDDY_NATIVE_BOOTSTRAP=1`.
+- To persist it, create `~/.workbuddy-subagent/config.json` with mode `0600` in a `0700` directory, outside the installed skill, bound to the resolved absolute WorkBuddy data directory:
 
   ```json
   {"native_bootstrap_consent": true, "workbuddy_data_dir": "/absolute/path/to/.workbuddy"}
   ```
 
-- Reuse consent for the matching data directory without asking again. It is personal: never commit, copy or distribute it. A different data directory does not inherit it.
-- Older versions stored `user-config.json` beside `SKILL.md`. During an authorized upgrade, migrate only consent already known to belong to this installation, preserving other configuration fields and adding its resolved data directory. Never migrate a file fetched from the repository or someone else's skill. The runtime no longer reads consent from the skill folder.
-- Without consent, the helper uses ordinary CLI startup. On bootstrap failure it fails closed.
+- Recorded consent is reused for the matching data directory without asking again. It is personal: never commit, copy or distribute it, and a different data directory does not inherit it.
+- Older versions stored `user-config.json` beside `SKILL.md`, which the runtime no longer reads. During an authorized upgrade, migrate only consent known to belong to this installation into the file above, preserving its other fields; never migrate a file from the repository or someone else's skill.
+- Without consent, the helper uses ordinary CLI startup. If bootstrap fails, it fails closed.
 
 The adapter depends on internal, version-dependent APIs. After WorkBuddy updates, rerun model, resume and tool smoke checks.
 
@@ -37,7 +37,7 @@ The adapter depends on internal, version-dependent APIs. After WorkBuddy updates
 `Authentication required` or HTTP 401 is a failure even if ACP initialized, the process exited zero or a session ID was returned.
 
 1. If the desktop cannot send a message, have the user sign in through WorkBuddy's normal flow and retry once.
-2. If the desktop works but CLI inference fails, check that native bootstrap is enabled and authorized. Repeated relogin does not fix missing bootstrap.
+2. If the desktop works but CLI inference fails, check with `doctor` that native bootstrap is enabled and authorized. Repeated relogin does not fix a missing bootstrap.
 3. Never disable encryption, scrape process tokens, export keys or tokens, change credential storage, or treat model discovery as proof of inference.
 
 ## Tested setup (macOS, 2026-10-09)
@@ -49,16 +49,16 @@ WorkBuddy 5.7.6 with bundled CLI 2.156.0, native bootstrap explicitly authorized
 - Astra fixed a file using only `Read` and `Edit`; the parent's independent tests passed.
 - Task logs were created with mode `0600`.
 
-Known caveats (do not assume newer builds behave the same):
+Known caveats (newer builds may differ):
 
 - `--resume` without `--model` reported `auto`; the helper now requires an exact model and rejects mismatched reported models.
 - The stream's initial `tools` list is the registered inventory, not the effective `--tools` filter. Inspect actual tool-use events.
 - `--bg` acknowledged a launch but left an empty log, and `agents --jobs` returned `No mapping found: POST /internal/agents`. Native background jobs are unverified; use host execution sessions and explicit resume.
 
-## Long-running work and logs
+## Logs and diagnostics
 
-Use the parent host's persistent execution handle with a durable checkpoint and log. The skill installs no OS service, cron job or retry loop. For missing handles, lost logs or host restarts, follow [interruption recovery](monitoring.md#interruption-recovery) before resuming side-effecting work.
+The skill installs no OS service, cron job or retry loop; long runs rely on the parent host's persistent execution session.
 
-Output paths must not already exist. Logs are created `0600`, updated as events arrive, and may contain task context or source code; keep them in durable private storage and out of published artifacts. An explicitly chosen temporary path is not backed up by the monitor. A missing final result means pending or failed, never complete.
+Output paths must not already exist. Logs are created `0600`, written as events arrive, and may contain task context or source code, so keep them in durable private storage and out of published artifacts. The monitor records a log's path, not a backup. A missing final result means pending or failed, never complete.
 
-Prompts travel through stdin backed by a private temporary file, so large briefs are not subject to process argument limits. CLI stderr is kept separately with mode `0600`: `<output>.stderr` for task logs, or a temporary file for catalog calls and tasks without an output path. Nonempty diagnostic paths are printed; empty files are removed. These diagnostics are never parsed as model responses or sent to the browser.
+Prompts travel through stdin from a private temporary file, so large briefs avoid process argument limits. CLI stderr is kept separately with mode `0600`: `<output>.stderr` for task logs, or a temporary file for catalog calls and tasks without an output path. Nonempty diagnostic paths are printed and empty files removed. Diagnostics are never parsed as model responses or sent to the browser.
