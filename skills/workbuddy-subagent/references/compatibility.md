@@ -57,8 +57,8 @@ Known caveats (do not assume newer builds behave the same):
 
 ## Long-running work and logs
 
-Use the parent host's persistent execution handle. Save the session ID and log while the CLI runs; after completion or interruption, inspect the workspace before resuming side-effecting work. The skill installs no OS service, cron job or retry loop.
+Use the parent host's persistent execution handle with a durable checkpoint and log. The skill installs no OS service, cron job or retry loop. For missing handles, lost logs or host restarts, follow [interruption recovery](monitoring.md#interruption-recovery) before resuming side-effecting work.
 
-Output paths must not already exist. Logs are created `0600`, updated as events arrive, and may contain task context or source code; keep them outside published repositories. A missing final result means pending or failed, never complete.
+Output paths must not already exist. Logs are created `0600`, updated as events arrive, and may contain task context or source code; keep them in durable private storage and out of published artifacts. An explicitly chosen temporary path is not backed up by the monitor. A missing final result means pending or failed, never complete.
 
 Prompts travel through stdin backed by a private temporary file, so large briefs are not subject to process argument limits. CLI stderr is kept separately with mode `0600`: `<output>.stderr` for task logs, or a temporary file for catalog calls and tasks without an output path. Nonempty diagnostic paths are printed; empty files are removed. These diagnostics are never parsed as model responses or sent to the browser.

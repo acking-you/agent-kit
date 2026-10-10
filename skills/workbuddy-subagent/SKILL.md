@@ -1,6 +1,6 @@
 ---
 name: workbuddy-subagent
-description: Run WorkBuddy's bundled CLI as a resumable external subagent. Route plan/architecture discussion, tradeoffs, product decisions, ideation, frontend design and writing to the latest strongest Claude; route factual investigation, verification/review and precise execution to the latest strongest GPT. Use when WorkBuddy is requested, a task benefits from an outside thinking partner or verifier, or a WorkBuddy session should continue.
+description: Delegate scoped work to WorkBuddy's bundled CLI, supervise resumable sessions, and verify their results. Use when WorkBuddy is requested, an independent thinking partner or verifier would help, or an existing WorkBuddy task needs recovery. Prefer Claude for planning, design and writing; GPT for factual review and precise execution, unless the user chooses otherwise.
 ---
 
 # WorkBuddy Subagent
@@ -25,7 +25,7 @@ Route by provider family, not model name. These are the user's routing preferenc
 | `review` | GPT | Factual investigation, claim and premise checks, code/design review |
 | `execute` (default) | GPT | Precise execution of an agreed plan, debugging, reproducible verification |
 
-`--profile` describes intent; it never selects a model. Consult Claude proactively at real decision points: several viable options, before committing to a nontrivial plan, when the user asks for an opinion, or when progress stalls. Do not delegate trivial or already-decided work.
+`--profile` describes intent; it never selects a model. An explicit user choice of provider or model for implementation overrides the default routing. Consult Claude proactively at real decision points: several viable options, before committing to a nontrivial plan, when the user asks for an opinion, or when progress stalls. Do not delegate trivial or already-decided work.
 
 **Mixed work:** Claude proposes (recommendation, alternatives, tradeoffs, assumptions). Extract its falsifiable premises and have GPT test them with `review`. Evidence settles falsifiable errors; report subjective disagreements to the user as tradeoffs. Resume Claude only when verified facts affect its recommendation.
 
@@ -44,7 +44,9 @@ Set `CLAUDE_MODEL` and `GPT_MODEL` below to those resolved IDs.
 
 ## Delegate
 
-The external model does not inherit this chat. Write a UTF-8 brief with the objective, context (including repository instructions and user constraints), allowed workspace/files, acceptance criteria and requested output. Ask for findings, assumptions, evidence and open questions, not hidden reasoning. Templates: [example briefs](references/model-policy.md#example-briefs).
+The external model does not inherit this chat. Write a UTF-8 brief with the objective, repository instructions, user constraints, allowed paths and tools, acceptance criteria, and who owns execution and delivery. Include relevant source evidence and prior findings; ask for conclusions and evidence, not hidden reasoning. Templates: [example briefs](references/model-policy.md#example-briefs).
+
+Put referenced files inside the delegated workspace when its read scope is restricted, or include their contents in the prompt. Passing `--prompt-file` sends that file as text; it does not authorize the paths mentioned inside it. Keep working notes untracked and out of published artifacts. For repository tasks, scope every write, including persistent memory, to the allowed paths; finishing a turn does not authorize global memory updates.
 
 Defaults: `--effort high`, `--timeout 0` (no imposed deadline), no imposed turn limit, tools `Read,Glob,Grep` in `plan` permission mode. Set `--max-turns` only when the user explicitly requests a cap. Hooks, inherited MCP servers and project/local CLI settings are excluded; put needed context in the brief.
 
@@ -74,7 +76,9 @@ python3 "$SKILL_DIR/scripts/workbuddy.py" run \
   --prompt-file /absolute/task/implementation.txt --output /absolute/task/implementation.jsonl
 ```
 
-Add `Bash` only for user-authorized shell scope. Tool filters and permission modes are not an OS sandbox; never bypass permissions to unblock a task.
+Add `Bash` only for user-authorized shell scope. For source-only delegation, assign builds, tests, generators and delivery to the parent explicitly; exclude both shell and alternative execution tools. Do not infer this restriction for tasks where execution is authorized. Tool filters and permission modes are not an OS sandbox: check actual tool-use events and changed paths, not just the init tool inventory.
+
+On a denied operation, diagnose the path, tool and scope before continuing. Correct a misplaced brief or perform authorized parent-owned work yourself; do not repeat the denied call, substitute another execution tool or expand permissions to evade the denial. If the running task repeatedly fails or crosses its scope, stop it through its execution handle, preserve its edits and inspect them before a corrected resume.
 
 ## Monitor
 
@@ -82,7 +86,9 @@ Each run starts or reuses a local read-only panel and prints `monitor_url`. Open
 
 ## Resume and long tasks
 
-Record `session_id`, model, workspace, log path, execution handle, scope and acceptance criteria. Resume the exact session only after its previous turn exits, with its recorded model and a new log path:
+Keep the checkpoint and complete per-turn logs in a durable, non-published directory, outside OS temporary directories and disposable build caches. Without `--output`, the monitor stores a private log under `~/.workbuddy-subagent/monitor/runs`; an explicit output path must also survive the expected wait. Record session ID, exact model, workspace, execution handle, log, scope, validation state and remaining delivery steps. Label results by the source revision or stage they actually checked.
+
+Resume the exact session only after confirming its previous turn exited or its runner is gone, with its recorded model and a new log path:
 
 ```bash
 python3 "$SKILL_DIR/scripts/workbuddy.py" run \
@@ -93,9 +99,9 @@ python3 "$SKILL_DIR/scripts/workbuddy.py" run \
 
 Never use `--continue` or send overlapping turns to one session. For an independent opinion, start a new session.
 
-For long runs, launch through the host's persistent execution-session tool and keep its handle. For long waits in Codex, add a thread heartbeat (normally five minutes), save a checkpoint (handle, session ID, log, remaining work, criteria, authorization limits) and yield. At each check, inspect sanitized activity, public output, relevant file changes and progress toward acceptance. Let useful work continue; intervene for repeated failures, unproductive repetition, scope drift or user direction. Quiet thinking alone is not a failure. To change direction, stop the runner through its execution handle, wait for exit and inspect side effects before resuming. The monitor only observes; it cannot steer or cancel a running turn.
+For long runs, launch through the host's persistent execution-session tool and keep its handle. For long waits in Codex, reuse or create a heartbeat on the current task (normally five minutes), save the checkpoint and yield. Keep the heartbeat prompt short and point it at that authoritative checkpoint instead of accumulating stale job histories. At each check, inspect sanitized activity, public output, relevant file changes and progress toward acceptance. Let useful work continue; intervene for repeated failures, unproductive repetition, scope drift or user direction. Quiet thinking alone is not a failure. To change direction, stop the runner through its execution handle, wait for exit and inspect side effects before resuming. The monitor only observes; it cannot steer or cancel a running turn.
 
-Stay quiet while nothing changes. When the run ends, finish already-authorized validation and delivery, then pause the heartbeat. Do not replace supervision with a fixed turn cap or blind retries. Without persistent execution support, state that limitation instead of promising unattended work. Do not rely on `--bg` or `agents --jobs`; they are unverified.
+Keep unchanged heartbeat checks quiet. A direct user status request still needs an explicit answer describing what remains active. When the run ends, finish already-authorized validation and delivery, then pause and verify only this task's heartbeat. For a missing handle, lost log or host restart, follow [interruption recovery](references/monitoring.md#interruption-recovery); never equate an unavailable handle with a completed task. Do not replace supervision with a fixed turn cap or blind retries. Without persistent execution support, state that limitation instead of promising unattended work. Do not rely on `--bg` or `agents --jobs`; they are unverified.
 
 ## Verify
 
@@ -103,4 +109,8 @@ Stay quiet while nothing changes. When the run ends, finish already-authorized v
 python3 "$SKILL_DIR/scripts/workbuddy.py" result /absolute/task/turn-2.jsonl --model "$SESSION_MODEL"
 ```
 
-Completion requires a successful nonempty final result, the requested reported model, no errors or permission denials, and the parent's own acceptance checks (tests, diff review). The helper exits nonzero on missing results, authentication errors, time/turn limits and cancellation. On failure, keep the diagnostic and stop dependent work. Do not retry blindly, downgrade the model, export credentials or disable encryption; see [authentication failures](references/compatibility.md#authentication-failures).
+The helper checks the final result and reported model, including nonempty success and reported errors or permission denials. It does not audit every tool result, enforce workspace scope, or verify the code. Inspect actual tool calls/results and changed paths as well; a successful final message does not erase a denied action or an unauthorized write. On failure, preserve the diagnostic and edits, withhold acceptance and diagnose before resuming. See [authentication failures](references/compatibility.md#authentication-failures); never retry blindly, downgrade silently, export credentials or disable encryption.
+
+The parent owns acceptance. Check findings against actual source and reproducible failures; turn accepted findings into concrete fixes and discriminating regressions. Existing green tests do not refute an uncovered failure path, and a review finding without evidence is not automatically a required redesign. Track unresolved findings and resume the appropriate author or reviewer with the relevant evidence.
+
+Run the repository's required checks on the resulting source. Coordinate shared builds and edits; checks run while source is changing are provisional. Regenerate bindings or translations when required, and inspect rendered UI when appearance is part of acceptance. A model result, compilation or one passing test suite does not complete downstream review or delivery. Report only checks actually run and preserve explicit limits on commits, pushes, publishing and live data.
