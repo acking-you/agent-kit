@@ -17,7 +17,7 @@
     stop.textContent=w.stop;resume.textContent=w.resume;prompt.placeholder=w.prompt;prompt.setAttribute('aria-label',w.prompt);
     stop.disabled=busy||!run||!['running','starting','blocked','unknown'].includes(run.status);
     resume.disabled=busy||!run||!['completed','stopped','failed'].includes(run.status)||!prompt.value.trim();
-    detail.textContent=message||(run?.resume_note ? w.copy+'\n' : '')+(run?.waiting_for ? w.blocked+'\n' : '')+w.note+(run?.job_id ? '\n'+w.attach+'\nclaude attach '+run.job_id : '');
+    detail.textContent=message||(run?.observation_error ? run.observation_error+'\n' : '')+(run?.resume_note ? w.copy+'\n' : '')+(run?.waiting_for ? w.blocked+'\n' : '')+w.note+(run?.job_id ? '\n'+w.attach+'\nclaude attach '+run.job_id : '');
   }
   async function control(action) {
     if(busy||!run)return;

@@ -153,6 +153,10 @@ def collect(root, info, listing):
                         info["error"] = monitor.public_content(content)
                         info["api_error"] = True
                     model = (item.get("message") or {}).get("model")
+                    if item.get("type")=="assistant" and not item.get("isApiErrorMessage") and model and model!="<synthetic>" and info.get("api_error"):
+                        info["api_error"]=False
+                        info.pop("error",None)
+                        info.pop("last_text",None)
                     if model and model != "<synthetic>":
                         info["reported_model"] = model
                         append_event(info, {"type":"system","subtype":"init","model":model,"__timestamp":item.get("timestamp") or now()})
@@ -219,8 +223,17 @@ def refresh(root, ident=None):
                     r["finalized"]=False
         unfinished=[r for r in records if not r.get("finalized")]
         if not unfinished:return records
-        listing = jobs(unfinished[0]["cli"])
-        return [collect(root,r,listing) if not r.get("finalized") else r for r in records]
+        inventories,errors={},{}
+        for cli in dict.fromkeys(r["cli"] for r in unfinished):
+            try: inventories[cli]=jobs(cli)
+            except (RuntimeError,OSError,ValueError,subprocess.SubprocessError) as exc:
+                errors[cli]=str(exc)
+        for r in unfinished:
+            collect(root,r,inventories.get(r["cli"],[]))
+            if r["cli"] in errors:
+                r["observation_error"]="Inventory query failed: "+errors[r["cli"]]
+                monitor.save(root/"runs"/(r["id"]+".json"),r)
+        return records
 
 
 def launch(root, cwd, prompt, model, effort="high", tools="Read,Glob,Grep", mode="plan", title=None, previous=None, cli=None, allowed_tools=""):

@@ -173,6 +173,32 @@ class NativeTests(unittest.TestCase):
         projection.accept({'type':'result','subtype':'success','result':'done'})
         self.assertIsNone(projection.final['turns']);self.assertIsNone(projection.final['permission_denials'])
 
+    def test_inventory_failure_isolated_by_recorded_cli(self):
+        other=dict(self.info,id='b'*24,cli='/valid/claude',job_id='goodjob',session_id='good-session',title='healthy')
+        cc.monitor.save(self.root/'runs'/('b'*24+'.json'),other)
+        def inventory(cli):
+            if cli=='/fake/claude':raise FileNotFoundError('old binary removed')
+            return [dict(id='goodjob',sessionId='good-session',state='working')]
+        with patch.object(cc,'jobs',side_effect=inventory) as query:
+            results={r['id']:r for r in cc.refresh(self.root)}
+        self.assertEqual(results[self.ident]['status'],'unknown')
+        self.assertIn('old binary removed',results[self.ident]['observation_error'])
+        self.assertEqual(results['b'*24]['status'],'running')
+        self.assertEqual({call.args[0] for call in query.call_args_list},{'/fake/claude','/valid/claude'})
+
+    def test_api_retry_success_clears_failure_and_replaces_late_result(self):
+        self.write([self.user(),self.assistant('Transient API error',isApiErrorMessage=True)])
+        self.settle(self.job('done'));self.assertEqual(self.info['status'],'failed')
+        with self.transcript.open('a') as f:f.write(json.dumps(self.assistant('successful retry'))+'\n')
+        with patch.object(cc,'jobs',return_value=self.job('done')):
+            cc.refresh(self.root,self.ident)
+            with patch.object(cc.time,'time',return_value=time.time()+2):result=cc.refresh(self.root,self.ident)[0]
+        self.assertEqual(result['status'],'completed');self.assertEqual(result['last_text'],'successful retry')
+        self.assertFalse(result['api_error']);self.assertNotIn('error',result)
+        projection=cc.monitor.Tail(str(self.log));projection.poll()
+        self.assertEqual(projection.projection.final['subtype'],'success')
+        self.assertEqual(projection.projection.final['errors'],'[]')
+
     def test_later_managed_turn_is_excluded(self):
         self.write([self.user(),self.assistant('mine'),self.user('[Managed task turn newer]'),self.assistant('another turn')])
         self.settle(self.job('done'))
