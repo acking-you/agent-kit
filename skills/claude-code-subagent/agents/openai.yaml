@@ -1,6 +1,6 @@
 interface:
   display_name: "Claude Code Subagent"
-  short_description: "Run, observe and recover native Claude Code tasks"
-  default_prompt: "Use $claude-code-subagent to delegate this task to Claude Code and supervise it through delivery."
+  short_description: "Delegate to native Claude Code and supervise it live"
+  default_prompt: "Use $claude-code-subagent to delegate this task to Claude Code, supervise it in the monitor, and verify the result before delivery."
 policy:
   allow_implicit_invocation: true

@@ -25,6 +25,7 @@ monitor=importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(monitor)
 ACTIVE = {"starting", "running", "blocked", "unknown", "finishing"}
 ID = re.compile(r"^[a-f0-9]{24}$")
+PERMISSION_MODES = ("bypassPermissions", "plan", "acceptEdits", "dontAsk", "manual", "auto")
 
 
 class NativeRejected(RuntimeError):
@@ -236,7 +237,7 @@ def refresh(root, ident=None):
         return records
 
 
-def launch(root, cwd, prompt, model, effort="high", tools="Read,Glob,Grep", mode="plan", title=None, previous=None, cli=None, allowed_tools=""):
+def launch(root, cwd, prompt, model, effort="high", tools="default", mode="bypassPermissions", title=None, previous=None, cli=None, allowed_tools="", resume_permission_mode=None, resume_tools=None):
     cli = cli or cli_path()
     cwd = str(Path(cwd).expanduser().resolve(strict=True))
     if not isinstance(prompt,str) or not isinstance(model,str) or not prompt.strip() or not model.strip(): raise RuntimeError("A nonempty brief and explicit model are required")
@@ -250,6 +251,8 @@ def launch(root, cwd, prompt, model, effort="high", tools="Read,Glob,Grep", mode
                 raise RuntimeError("Previous turn must be confirmed done or stopped; never resume a working or missing job")
             allowed_tools = old.get("allowed_tools", "")
             cwd, model, effort, tools, mode = old["cwd"],old["model"],old["effort"],old["tools"],old["permission_mode"]
+            if resume_permission_mode is not None: mode = resume_permission_mode
+            if resume_tools is not None: tools = resume_tools
             if not old.get("finalized"):
                 raise RuntimeError("The stopped turn transcript is still settling; check status before resuming")
             lineage=old.get("conversation_id",old["id"])
@@ -273,6 +276,7 @@ def launch(root, cwd, prompt, model, effort="high", tools="Read,Glob,Grep", mode
         monitor.save(root/"runs"/(ident+".json"),info)
         args=["--bg","--name",f"cc-{ident}","--model",model,"--effort",effort,"--tools",tools,"--permission-mode",mode,
               "--settings",str(task/"settings.json"),"--strict-mcp-config","--mcp-config",'{"mcpServers":{}}']
+        if mode == "bypassPermissions": args += ["--dangerously-skip-permissions"]
         if allowed_tools: args += ["--allowedTools",allowed_tools]
         if previous: args += ["--resume",old["session_id"]]
         try:
@@ -380,6 +384,9 @@ def panel(root):
     with (root/"start.lock").open("a") as file:
         fcntl.flock(file,fcntl.LOCK_EX)
         info=monitor.server_info(root)
+        if info:
+            # Migrate a live installation before its old observer removes server.json.
+            monitor.save(root/"endpoint.json", {"port": info["port"], "token": info["token"]})
         if not info:
             p=subprocess.Popen([sys.executable,str(HERE/"claude_code.py"),"_serve","--state-dir",str(root)],stdin=subprocess.DEVNULL,
                                stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
@@ -400,8 +407,11 @@ def main(argv=None):
         s=sub.add_parser(name);s.add_argument("--state-dir");s.add_argument("--prompt-file",required=True);s.add_argument("--title")
         if name=="run":
             s.add_argument("--cwd",required=True);s.add_argument("--model",required=True);s.add_argument("--effort",default="high",choices=["low","medium","high","xhigh","max"])
-            s.add_argument("--tools",default="Read,Glob,Grep");s.add_argument("--allowed-tools",default="");s.add_argument("--permission-mode",default="plan",choices=["plan","acceptEdits","dontAsk","manual","auto"])
-        else:s.add_argument("id")
+            s.add_argument("--tools",default="default");s.add_argument("--allowed-tools",default="");s.add_argument("--permission-mode",default="bypassPermissions",choices=PERMISSION_MODES)
+        else:
+            s.add_argument("id")
+            s.add_argument("--permission-mode",choices=PERMISSION_MODES)
+            s.add_argument("--tools")
     for name in ("status","stop","logs","result","attach"):
         s=sub.add_parser(name);s.add_argument("id");s.add_argument("--state-dir")
     s=sub.add_parser("_hook");s.add_argument("--record",required=True)
@@ -415,7 +425,7 @@ def main(argv=None):
     elif a.action in ("run","resume"):
         if a.action=="run":info=launch(root,a.cwd,Path(a.prompt_file).read_text(),a.model,a.effort,a.tools,a.permission_mode,a.title,allowed_tools=a.allowed_tools)
         else:
-            old=record(root,a.id);info=launch(root,old["cwd"],Path(a.prompt_file).read_text(),old["model"],title=a.title,previous=a.id,cli=old["cli"])
+            old=record(root,a.id);info=launch(root,old["cwd"],Path(a.prompt_file).read_text(),old["model"],title=a.title,previous=a.id,cli=old["cli"],resume_permission_mode=a.permission_mode,resume_tools=a.tools)
         result={**info,"monitor_url":panel(root)+"#"+info["id"]}
     elif a.action=="monitor":result={"monitor_url":panel(root)}
     elif a.action=="list":result=refresh(root)

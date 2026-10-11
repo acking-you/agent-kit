@@ -40,10 +40,6 @@
         <button id="rail-close" class="icon-button rail-close" type="button" aria-label="Hide sessions" title="Hide sessions" data-i18n-aria-label="rail.close" data-i18n-title="rail.close"><span data-icon="close"></span></button>
       </div>
       <nav id="sessions" class="sessions" aria-label="Claude Code sessions" data-i18n-aria-label="sessions.navLabel"></nav>
-      <div class="rail-note">
-        <span data-icon="eye"></span>
-        <p><strong data-i18n="rail.noteTitle">Native session controls</strong><span data-i18n="rail.noteBody">Closing the panel leaves tasks running. Stop and resume them here.</span></p>
-      </div>
     </aside>
     <div id="scrim" class="scrim" hidden></div>
 
@@ -64,25 +60,29 @@
 
       <section id="workspace" class="workspace" hidden>
         <header class="task-head">
-          <div class="task-kicker">
-            <span id="profile" class="task-profile"></span>
-            <span class="kicker-sep" aria-hidden="true">·</span>
-            <span id="session-id" class="task-session"></span>
-            <span class="select-wrap turn-picker">
-              <select id="turn" aria-label="Session turn" data-i18n-aria-label="turn.aria"></select>
-              <span class="select-chevron" data-icon="chevronDown"></span>
-            </span>
+          <div class="task-identity">
+            <div class="task-kicker">
+              <span id="profile" class="task-profile"></span>
+              <span class="kicker-sep" aria-hidden="true">·</span>
+              <span id="session-id" class="task-session"></span>
+              <span class="select-wrap turn-picker">
+                <select id="turn" aria-label="Session turn" data-i18n-aria-label="turn.aria"></select>
+                <span class="select-chevron" data-icon="chevronDown"></span>
+              </span>
+            </div>
+            <h1 id="title" class="task-title"></h1>
+            <div class="task-meta">
+              <span id="status" class="status-pill tone-neutral"></span>
+              <span class="meta-item" data-i18n-title="task.elapsed" title="Elapsed time"><span data-icon="clock"></span><span id="duration"></span></span>
+              <span class="meta-item meta-model"><span data-icon="cpu"></span><span id="model"></span></span>
+              <span class="meta-item meta-path"><span data-icon="folder"></span><span id="cwd" class="path"></span></span>
+            </div>
           </div>
-          <h1 id="title" class="task-title"></h1>
-          <div class="task-meta">
-            <span id="status" class="status-pill tone-neutral"></span>
-            <span class="meta-item" data-i18n-title="task.elapsed" title="Elapsed time"><span data-icon="clock"></span><span id="duration"></span></span>
-            <span class="meta-item meta-model"><span data-icon="cpu"></span><span id="model"></span></span>
-            <span class="meta-item meta-path"><span data-icon="folder"></span><span id="cwd" class="path"></span></span>
-          </div>
+          <div id="native-actions" class="task-actions" role="group" aria-label="Task controls" data-i18n-aria-label="controls.group"></div>
         </header>
 
-        <section id="native-controls" class="native-controls" aria-label="Task controls"></section>
+        <div id="native-info" class="native-info"></div>
+        <div id="native-notice" class="native-notice"></div>
         <div id="error" class="banner" role="alert" hidden></div>
 
         <div class="toolbar">
@@ -115,6 +115,8 @@
           </div>
           <button id="jump" class="jump" type="button" hidden><span data-icon="arrowDown"></span><span data-i18n="jump">Jump to latest</span></button>
         </div>
+
+        <section id="native-composer" class="composer" aria-label="Resume session" data-i18n-aria-label="controls.composer" hidden></section>
       </section>
     </main>
   </div>

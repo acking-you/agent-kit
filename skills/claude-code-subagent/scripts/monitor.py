@@ -2,11 +2,13 @@
 """Reusable monitor projection and HTTP server, adapted from the WorkBuddy panel."""
 import argparse
 import difflib
+import errno
 import fcntl
 import json
 import os
 from pathlib import Path
 import secrets
+import re
 import signal
 import subprocess
 import sys
@@ -325,10 +327,34 @@ class MonitorServer(ThreadingHTTPServer):
 
     def __init__(self, root):
         self.root = root
-        self.token = secrets.token_urlsafe(32)
+        endpoint = endpoint_info(root)
+        self.token = endpoint.get("token") or secrets.token_urlsafe(32)
         self.last_request = time.monotonic()
         self.stopping = threading.Event()
-        super().__init__(("127.0.0.1", 0), Handler)
+        try:
+            super().__init__(("127.0.0.1", endpoint.get("port", 0)), Handler)
+        except OSError as exc:
+            if not endpoint or exc.errno != errno.EADDRINUSE:
+                raise
+            # Do not interfere with a different process occupying the saved port.
+            super().__init__(("127.0.0.1", 0), Handler)
+        try:
+            save(root / "endpoint.json", {"port": self.server_port, "token": self.token})
+        except Exception:
+            self.server_close()
+            raise
+
+
+def endpoint_info(root):
+    """Keep the private capability and origin across normal observer restarts."""
+    for path in (root / "endpoint.json", root / "server.json"):
+        info = read(path)
+        if not isinstance(info, dict):
+            continue
+        port, token = info.get("port"), info.get("token")
+        if type(port) is int and 1024 <= port <= 65535 and isinstance(token, str) and re.fullmatch(r"[A-Za-z0-9_-]{32,128}", token):
+            return {"port": port, "token": token}
+    return {}
 
 
 class Handler(BaseHTTPRequestHandler):
