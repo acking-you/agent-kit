@@ -269,7 +269,7 @@ class Projection:
                 if not isinstance(block, dict):
                     continue
                 if block.get("type") == "tool_use":
-                    self.activity["phase"] = "tool_input"
+                    self.activity["phase"] = "tool_running"
                     self.tool(block)
                 elif block.get("type") == "tool_result":
                     self.activity["phase"] = "tool_result"
@@ -280,7 +280,7 @@ class Projection:
             self.activity["phase"] = "finished"
             self.final = {"text": clipped(item.get("result", "")), "subtype": item.get("subtype"),
                           "turns": item.get("num_turns"), "models": list(item.get("modelUsage", {})),
-                          "errors": clipped(item.get("errors", [])), "permission_denials": len(item.get("permission_denials") or [])}
+                          "errors": clipped(item.get("errors", [])), "permission_denials": len(item.get("permission_denials") or []) if "permission_denials" in item else None}
 
     def snapshot(self):
         return {"cards": list(self.cards.values()), "model": self.model, "final": self.final, "activity": self.activity}

@@ -156,6 +156,13 @@ class NativeTests(unittest.TestCase):
             recovered=cc.refresh(self.root,saved['id'])[0]
         self.assertEqual(recovered['status'],'running');self.assertEqual(recovered['job_id'],'cafe1234')
 
+    def test_native_projection_does_not_invent_metrics(self):
+        projection=cc.monitor.Projection()
+        projection.accept({'type':'assistant','message':{'id':'m','content':[{'type':'tool_use','id':'t','name':'Read','input':{'file_path':'proof.md'}}]}})
+        self.assertEqual(projection.activity['phase'],'tool_running')
+        projection.accept({'type':'result','subtype':'success','result':'done'})
+        self.assertIsNone(projection.final['turns']);self.assertIsNone(projection.final['permission_denials'])
+
     def test_later_managed_turn_is_excluded(self):
         self.write([self.user(),self.assistant('mine'),self.user('[Managed task turn newer]'),self.assistant('another turn')])
         self.settle(self.job('done'))

@@ -455,7 +455,7 @@ function renderResult() {
   const denials = finalResult.permission_denials;
   fact(t('result.outcome'), P.labelFor(lang, 'subtype', subtype), subtype);
   if (finalResult.turns != null) fact(t('result.turns'), String(finalResult.turns));
-  fact(t('result.denials'), String(Array.isArray(denials) ? denials.length : denials ?? 0));
+  if (denials != null) fact(t('result.denials'), String(Array.isArray(denials) ? denials.length : denials));
   if (current) fact(t('result.duration'), elapsed(current));
   fact(t('result.runner'), statusLabel(status), status);
   section.append(head, facts);

@@ -45,6 +45,7 @@
       'activity.phase.thinking': 'Thinking',
       'activity.phase.writing': 'Writing',
       'activity.phase.tool_input': 'Preparing a tool call',
+      'activity.phase.tool_running': 'Tool running',
       'activity.phase.tool_result': 'Processing tool results',
       'activity.phase.waiting': 'Waiting for model output',
       'activity.lastEvent': 'Last event {age} ago',
@@ -197,6 +198,8 @@
       'profile.unknown': 'Task',
 
       'subtype.success': 'Success',
+      'subtype.stopped': 'Stopped',
+      'subtype.failed': 'Failed',
       'subtype.error_max_turns': 'Stopped at the turn limit',
       'subtype.error_during_execution': 'Error during execution',
       'subtype.error_max_budget_usd': 'Stopped at the budget limit',
@@ -247,6 +250,7 @@
       'activity.phase.thinking': '思考中',
       'activity.phase.writing': '正在输出',
       'activity.phase.tool_input': '正在准备工具调用',
+      'activity.phase.tool_running': '工具执行中',
       'activity.phase.tool_result': '正在处理工具结果',
       'activity.phase.waiting': '等待模型输出',
       'activity.lastEvent': '最近活动：{age}前',
@@ -398,6 +402,8 @@
       'profile.unknown': '任务',
 
       'subtype.success': '成功',
+      'subtype.stopped': '已停止',
+      'subtype.failed': '失败',
       'subtype.error_max_turns': '已达轮数上限',
       'subtype.error_during_execution': '执行期间出错',
       'subtype.error_max_budget_usd': '已达预算上限',
