@@ -1,5 +1,7 @@
 import importlib.util
+import io
 import json
+import socket
 from pathlib import Path
 import sys
 import tempfile
@@ -7,6 +9,7 @@ import threading
 import time
 import unittest
 from unittest.mock import patch
+from contextlib import redirect_stdout
 import urllib.request
 import urllib.error
 
@@ -96,6 +99,34 @@ class NativeTests(unittest.TestCase):
         settings=json.loads((Path(r['hook_record']).parent/'settings.json').read_text())
         self.assertEqual(settings['env']['CLAUDE_CODE_DISABLE_BG_EXIT_HANDOFF'],'1');self.assertFalse(settings['autoMemoryEnabled'])
         self.assertEqual(r['session_id'],'new-session')
+
+    def test_default_dispatch_has_all_tools_and_bypasses_permissions(self):
+        listing=[{'id':'cafe1234','sessionId':'new-session','state':'working'}]
+        with patch.object(cc,'native',return_value='backgrounded · cafe1234'),patch.object(cc,'jobs',return_value=listing):
+            r=cc.launch(self.root,self.task,'Implement the authorized task','model',cli='/fake/claude')
+            args=cc.native.call_args.args[1]
+        self.assertEqual(r['permission_mode'],'bypassPermissions')
+        self.assertEqual(r['tools'],'default')
+        self.assertEqual(args[args.index('--permission-mode')+1],'bypassPermissions')
+        self.assertEqual(args[args.index('--tools')+1],'default')
+        self.assertIn('--dangerously-skip-permissions',args)
+
+    def test_cli_defaults_match_unattended_dispatch(self):
+        brief=self.task/'brief.md';brief.write_text('Implement the authorized task')
+        with patch.object(cc,'launch',return_value={'id':'b'*24}) as launch,patch.object(cc,'panel',return_value='http://localhost/'),redirect_stdout(io.StringIO()):
+            self.assertEqual(cc.main(['run','--state-dir',str(self.root),'--cwd',str(self.task),'--model','model','--prompt-file',str(brief)]),0)
+        self.assertEqual(launch.call_args.args[4:7],('high','default','bypassPermissions'))
+
+    def test_resume_can_explicitly_upgrade_permissions_without_changing_old_turn(self):
+        self.info.update(finalized=True,status='stopped');self.save()
+        with patch.object(cc,'jobs',side_effect=[self.job('stopped'),[{'id':'cafe1234','sessionId':'copy','state':'working'}]]),patch.object(cc,'native',return_value='backgrounded · cafe1234'):
+            r=cc.launch(self.root,self.task,'Continue with authorized full permissions','ignored',previous=self.ident,cli='/fake/claude',resume_permission_mode='bypassPermissions',resume_tools='default')
+            args=cc.native.call_args.args[1]
+        self.assertEqual((r['permission_mode'],r['tools'],r['model'],r['effort']),('bypassPermissions','default','model','high'))
+        self.assertIn('--dangerously-skip-permissions',args)
+        self.assertIn('--resume',args)
+        old=cc.record(self.root,self.ident)
+        self.assertEqual((old['permission_mode'],old['tools']),('plan','Read'))
 
     def test_stop_requires_native_confirmation(self):
         self.write([self.user(),self.assistant('partial')])
@@ -238,6 +269,32 @@ class NativeTests(unittest.TestCase):
             stop.assert_called_once_with(self.root,self.ident)
         with self.assertRaises(urllib.error.HTTPError) as e:urllib.request.urlopen(request(headers,target=url[:-24]+'f'*24))
         e.exception.close();self.assertEqual(e.exception.code,409)
+
+    def test_monitor_restart_keeps_origin_and_private_capability(self):
+        first=cc.monitor.MonitorServer(self.root)
+        port,token=first.server_port,first.token
+        first.server_close()
+        second=cc.monitor.MonitorServer(self.root);self.addCleanup(second.server_close)
+        self.assertEqual((second.server_port,second.token),(port,token))
+        endpoint=self.root/'endpoint.json'
+        self.assertEqual(endpoint.stat().st_mode & 0o777,0o600)
+        self.assertEqual(cc.monitor.read(endpoint),{'port':port,'token':token})
+
+    def test_live_panel_migrates_endpoint_before_restart(self):
+        info={'pid':123,'port':54321,'token':'a'*43}
+        with patch.object(cc.monitor,'server_info',return_value=info):
+            url=cc.panel(self.root)
+        self.assertEqual(url,'http://127.0.0.1:54321/'+'a'*43+'/')
+        self.assertEqual(cc.monitor.endpoint_info(self.root),{'port':54321,'token':'a'*43})
+
+    def test_occupied_monitor_port_falls_back_without_changing_capability(self):
+        occupied=socket.socket();self.addCleanup(occupied.close)
+        occupied.bind(('127.0.0.1',0));occupied.listen(1)
+        port=occupied.getsockname()[1];token='b'*43
+        cc.monitor.save(self.root/'endpoint.json',{'port':port,'token':token})
+        server=cc.monitor.MonitorServer(self.root);self.addCleanup(server.server_close)
+        self.assertNotEqual(server.server_port,port);self.assertEqual(server.token,token)
+        self.assertEqual(cc.monitor.endpoint_info(self.root),{'port':server.server_port,'token':token})
 
 
 if __name__=='__main__':unittest.main()

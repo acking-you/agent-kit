@@ -57,8 +57,6 @@
 
       'rail.toggle': 'Show sessions',
       'rail.close': 'Hide sessions',
-      'rail.noteTitle': 'Native session controls',
-      'rail.noteBody': 'Closing the panel leaves tasks running. Stop and resume them here.',
       'sessions.heading': 'Sessions',
       'sessions.navLabel': 'Claude Code sessions',
       'sessions.empty': 'Sessions appear here once an agent starts.',
@@ -94,7 +92,7 @@
       'conn.offline.hint': 'The monitor is offline. Restart it, then reopen this panel.',
 
       'welcome.title': 'Nothing to observe yet',
-      'welcome.body': 'Start a Claude Code subagent with the skill. Its replies, tool activity and file changes will appear here as they happen.',
+      'welcome.body': 'Start a Claude Code subagent with the skill. Its replies, tool calls and file changes appear here.',
       'welcome.step1': 'Replies appear as native message blocks are saved',
       'welcome.step2': 'Tool calls open to show their arguments and results',
       'welcome.step3': 'File edits are previewed and marked pending until applied',
@@ -110,6 +108,8 @@
       'turn.aria': 'Session turn',
       'turn.option': 'Turn {n} of {total}',
       'turn.resumed': 'resumed',
+      'controls.group': 'Task controls',
+      'controls.composer': 'Resume session',
 
       'banner.failed': 'This run failed',
       'banner.interrupted': 'This run was interrupted',
@@ -226,7 +226,7 @@
       'waiting.ended.body': 'This run ended before any public output was recorded.',
 
       'activity.live': 'Observing live activity',
-      'activity.saved': 'Saved transcript · read only',
+      'activity.saved': 'Saved transcript',
 
       'count.items': { one: '{n} item', other: '{n} items' },
       'count.turns': { one: '{n} turn', other: '{n} turns' },
@@ -259,8 +259,6 @@
 
       'rail.toggle': '显示会话列表',
       'rail.close': '隐藏会话列表',
-      'rail.noteTitle': '原生会话控制',
-      'rail.noteBody': '关闭面板后任务继续运行，可在这里停止或恢复。',
       'sessions.heading': '会话',
       'sessions.navLabel': 'Claude Code 会话',
       'sessions.empty': '智能体启动后，会话会显示在这里。',
@@ -296,7 +294,7 @@
       'conn.offline.hint': '监控服务已离线。请重启服务，然后重新打开此面板。',
 
       'welcome.title': '暂无可观察的内容',
-      'welcome.body': '使用技能启动一个 Claude Code 子智能体后，它的回复、工具活动和文件改动会实时显示在这里。',
+      'welcome.body': '使用技能启动 Claude Code 子智能体后，它的回复、工具调用和文件改动会显示在这里。',
       'welcome.step1': '原生消息块保存后实时呈现',
       'welcome.step2': '展开工具调用即可查看参数与结果',
       'welcome.step3': '文件改动提供预览，应用前标记为待应用',
@@ -312,6 +310,8 @@
       'turn.aria': '会话轮次',
       'turn.option': '第 {n} 轮（共 {total} 轮）',
       'turn.resumed': '续接',
+      'controls.group': '任务控制',
+      'controls.composer': '恢复会话',
 
       'banner.failed': '此任务运行失败',
       'banner.interrupted': '此任务已中断',
@@ -430,7 +430,7 @@
       'waiting.ended.body': '此任务在记录任何公开输出之前就已结束。',
 
       'activity.live': '正在观察实时活动',
-      'activity.saved': '已保存的记录 · 只读',
+      'activity.saved': '已保存的记录',
 
       'count.items': { other: '{n} 项' },
       'count.turns': { other: '{n} 轮' },
