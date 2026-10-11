@@ -4,6 +4,7 @@ import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import fcntl
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -16,9 +17,12 @@ import sys
 import threading
 import time
 from urllib.parse import urlsplit
-import monitor
 
 HERE = Path(__file__).resolve().parent
+# Load this skill's adapter independently of any other skill named monitor.
+_spec=importlib.util.spec_from_file_location("claude_code_monitor",HERE/"monitor.py")
+monitor=importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(monitor)
 ACTIVE = {"starting", "running", "blocked", "unknown", "finishing"}
 ID = re.compile(r"^[a-f0-9]{24}$")
 

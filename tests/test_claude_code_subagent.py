@@ -156,6 +156,16 @@ class NativeTests(unittest.TestCase):
             recovered=cc.refresh(self.root,saved['id'])[0]
         self.assertEqual(recovered['status'],'running');self.assertEqual(recovered['job_id'],'cafe1234')
 
+    def test_helper_is_independent_of_another_monitor_module(self):
+        from types import ModuleType
+        unrelated=ModuleType('monitor')
+        with patch.dict(sys.modules,{'monitor':unrelated}):
+            spec=importlib.util.spec_from_file_location('isolated_claude_helper',SCRIPTS/'claude_code.py')
+            helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
+            projection=helper.monitor.Projection()
+            projection.accept({'type':'result','subtype':'success','result':'own adapter'})
+        self.assertEqual(projection.final['text'],'own adapter')
+
     def test_native_projection_does_not_invent_metrics(self):
         projection=cc.monitor.Projection()
         projection.accept({'type':'assistant','message':{'id':'m','content':[{'type':'tool_use','id':'t','name':'Read','input':{'file_path':'proof.md'}}]}})
