@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const {JSDOM} = require('jsdom');
-const assets = path.join(__dirname, '../skills/workbuddy-subagent/assets/monitor');
+const assets = process.env.MONITOR_TEST_ASSETS || path.join(__dirname, '../skills/workbuddy-subagent/assets/monitor');
 
 async function panel(t) {
   const dom = new JSDOM(fs.readFileSync(path.join(assets, 'index.html'), 'utf8'), {
@@ -50,7 +50,7 @@ test('system changes update the loaded panel; manual choices remain fixed', asyn
   p.choice('language','zh'); p.choice('theme','light');
   p.systemLanguage(['en-GB']); p.systemDark(true);
   assert.equal(root.lang,'zh-CN'); assert.equal(root.dataset.theme,'light');
-  assert.equal(p.w.localStorage.getItem('workbuddy.monitor.language'),'zh');
+  assert.equal(p.w.localStorage.getItem(p.w.WorkBuddyPreferences.LANGUAGE_KEY),'zh');
   p.choice('language','system'); p.choice('theme','system');
   assert.equal(root.lang,'en'); assert.equal(root.dataset.theme,'dark');
 });

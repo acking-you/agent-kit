@@ -12,6 +12,14 @@ Resumable Claude and GPT sessions through WorkBuddy's bundled CLI, with a local 
 Install the skill at https://github.com/acking-you/agent-kit/tree/main/skills/workbuddy-subagent into my global skills directory.
 ```
 
+### Claude Code subagent
+
+Native Claude Code background sessions with the same Markdown monitor, stop/resume controls and persistent history. Runs at high effort by default; the parent agent supervises without an imposed turn limit. Requires Python 3.9+ and a signed-in Claude Code CLI with native background agents. Validated on macOS with Claude Code 2.1.296.
+
+```text
+Install the skill at https://github.com/acking-you/agent-kit/tree/main/skills/claude-code-subagent into my global skills directory.
+```
+
 ### Technical documentation
 
 Write evidence-based implementation, architecture and troubleshooting explanations, or make a focused edit without restructuring the rest of a document.
