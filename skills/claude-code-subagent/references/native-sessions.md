@@ -39,6 +39,10 @@ The native supervisor runs separately from the local panel. Closing or restartin
 
 The panel binds to loopback behind a capability URL. State changes require a same-origin JSON POST with the correct Host and capability. There is no general shell endpoint and no arbitrary path access. Replies render through the same sanitized Markdown layer as WorkBuddy; tool content stays literal text; hidden thinking never reaches logs or the browser.
 
+The selected turn's **User input** section and `logs` output read user text from the hook-recorded native transcript, including follow-ups within that managed turn. The helper's leading turn marker is removed; earlier and later managed turns, tool-result envelopes, native local-command groups, compaction summaries and hidden thinking are excluded. Input renders as literal, selectable text with an explicit copy action. Attachments show their kinds, not their contents. The saved dispatch brief is a labelled, unconfirmed fallback when no native input is retained; the panel never resumes or queries a terminal job to recover input.
+
+Display limits are explicit: 60,000 characters per message, 64 messages and 240,000 characters per turn. The first and newest inputs are retained, with truncation and omission notices; copying a truncated message copies only the shown text. Native transcripts remain unchanged. Input is available only through the existing private panel capability and local `logs` command, so treat those surfaces as containing the task's original prompt.
+
 ## Recovery
 
 1. Read the managed record and `claude agents --json --all`. Missing inventory or a missing host handle does not prove completion. A blocked task needs its native prompt answered, not another overlapping turn.

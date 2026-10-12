@@ -532,6 +532,21 @@ pre, code { font-family: var(--font-mono); }
 .waiting-title { font-size: 14px; font-weight: 600; color: var(--text); }
 .waiting-body { margin-top: 2px; font-size: 13.5px; color: var(--text-2); }
 
+/* Native user input is literal, explicitly expanded and independently copyable. */
+.user-inputs { margin-bottom: 28px; min-width: 0; }
+.input-heading { margin: 0 0 10px; font-size: 14px; color: var(--text-2); font-weight: 600; }
+.input-message { border: 1px solid var(--line); border-radius: 12px; background: var(--surface-sunken); margin-top: 8px; overflow: hidden; }
+.input-summary { padding: 12px 14px; cursor: pointer; color: var(--text); font-size: 13px; overflow-wrap: anywhere; }
+.input-label { font-weight: 600; }
+.input-time { color: var(--text-3); margin-left: 10px; font-size: 12px; }
+.input-preview { display: block; margin: 5px 0 0 16px; color: var(--text-2); line-height: 1.5; }
+.input-message[open] .input-preview { display: none; }
+.input-body { padding: 0 14px 14px; }
+.input-text { margin: 0; max-height: 440px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.65 var(--font-mono, monospace); color: var(--text); }
+.input-note { margin: 8px 0; font-size: 12px; color: var(--text-2); line-height: 1.5; }
+.input-copy { margin-top: 10px; min-height: 36px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; font-size: 12px; }
+.input-summary:focus-visible, .input-copy:focus-visible, .input-text:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
 .cards { display: flex; flex-direction: column; }
 .card { margin-bottom: 24px; min-width: 0; }
 .tool-card + .tool-card { margin-top: -16px; }

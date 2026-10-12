@@ -10,6 +10,8 @@ let cards = new Map(), nodes = new Map(), lastList = '', finalResult = null;
 let streamClosed = true;
 let streamRevision = '';
 let snapshotReceived = false;
+let userInputs = null;
+const expandedInputs = new Set();
 let finalOpen = false;
 let conn = 'connecting';
 let liveActivity = null;
@@ -238,6 +240,7 @@ function select(id) {
   if (id !== selected) { expanded.clear(); autoOpened.clear(); finalOpen = false; }
   liveActivity = null;
   selected = id; history.replaceState(null,'',`#${id}`); cards.clear(); nodes.clear(); finalResult = null; snapshotReceived = false;
+  renderInputs(null);
   $('cards').replaceChildren(); $('result').hidden = true; $('waiting').hidden = false;
   const run = runs.find(r => r.id === id); if (!run) return;
   heading(run); renderList(); connection('connecting'); renderWaiting(); applyFilter();
@@ -262,6 +265,7 @@ function receive(event, reset) {
   streamRevision = revision(data.run);
   const index = runs.findIndex(r => r.id === selected); if (index >= 0) runs[index] = data.run;
   for (const card of data.cards) { if (!['text','tool'].includes(card.kind)) continue; cards.set(card.id, card); renderCard(card); }
+  renderInputs(data.user_inputs || null);
   finalResult = data.final; renderResult(); renderList(); applyFilter();
   renderWaiting();
   if (keepScroll !== null) timeline.scrollTop = keepScroll;
@@ -275,6 +279,52 @@ function renderWaiting() {
   node.className = `waiting is-${state}`;
   setText(node.querySelector('.waiting-title'), t(`waiting.${state}.title`));
   setText(node.querySelector('.waiting-body'), t(`waiting.${state}.body`));
+}
+
+// User input stays separate from assistant replies and tool-result envelopes.
+function renderInputs(value = userInputs) {
+  userInputs = value;
+  const section = $('user-inputs');
+  const signature = JSON.stringify([lang, value]);
+  if (section.dataset.signature === signature) return;
+  section.dataset.signature = signature;
+  section.hidden = !value;
+  section.replaceChildren();
+  if (!value) return;
+  section.append(el('h2', 'input-heading', t('input.title')));
+  const messages = value.messages || [];
+  if (value.source !== 'transcript') section.append(el('p', 'input-note', t(value.source === 'brief' ? 'input.saved' : 'input.unavailable')));
+  if (value.unavailable) section.append(el('p', 'input-note', t('input.retained')));
+  if (value.omitted) section.append(el('p', 'input-note', t('input.omitted', {n: value.omitted})));
+  messages.forEach((message, index) => {
+    const key = selected + ':' + message.id;
+    const details = el('details', 'input-message');
+    details.open = expandedInputs.has(key);
+    const summary = el('summary', 'input-summary');
+    summary.append(el('span', 'input-label', t('input.message', {n: index + 1})));
+    if (message.timestamp) {
+      const time = new Date(message.timestamp);
+      if (Number.isFinite(time.getTime())) summary.append(el('time', 'input-time', time.toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US')));
+    }
+    summary.append(el('span', 'input-preview', (message.text || '').replace(/\s+/g, ' ').slice(0, 120)));
+    const body = el('div', 'input-body'), text = el('pre', 'input-text', message.text || '');
+    text.tabIndex = 0;
+    body.append(text);
+    if (message.attachments?.length) body.append(el('p', 'input-note', t('input.attachments', {types: message.attachments.map(kind => t('input.' + kind)).join(', ')})));
+    if (message.truncated) body.append(el('p', 'input-note', t('input.truncated')));
+    const copy = el('button', 'input-copy', t(message.truncated ? 'input.copyShown' : 'input.copy'));
+    copy.type = 'button';
+    copy.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(message.text || ''); copy.textContent = t('input.copied'); }
+      catch (_) { copy.textContent = t('input.copyFailed'); }
+    });
+    body.append(copy);
+    details.append(summary, body);
+    details.addEventListener('toggle', () => {
+      if (details.open) expandedInputs.add(key); else expandedInputs.delete(key);
+    });
+    section.append(details);
+  });
 }
 
 // ---------- Cards ----------
@@ -529,7 +579,7 @@ function translateStatic() {
 function rerenderAll() {
   const timeline = $('timeline'), top = timeline.scrollTop, following = $('follow').checked;
   renderConnection(); renderWelcome(); renderList(true);
-  if (current) { heading(current); for (const card of cards.values()) renderCard(card); renderResult(); applyFilter(); renderWaiting(); }
+  if (current) { heading(current); for (const card of cards.values()) renderCard(card); renderInputs(); renderResult(); applyFilter(); renderWaiting(); }
   timeline.scrollTop = following ? timeline.scrollHeight : top;
 }
 function renderSettingsHints() {

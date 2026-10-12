@@ -23,6 +23,9 @@ HERE = Path(__file__).resolve().parent
 _spec=importlib.util.spec_from_file_location("claude_code_monitor",HERE/"monitor.py")
 monitor=importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(monitor)
+_input_spec=importlib.util.spec_from_file_location("claude_code_user_inputs",HERE/"user_inputs.py")
+user_inputs=importlib.util.module_from_spec(_input_spec)
+_input_spec.loader.exec_module(user_inputs)
 ACTIVE = {"starting", "running", "blocked", "unknown", "finishing"}
 ID = re.compile(r"^[a-f0-9]{24}$")
 PERMISSION_MODES = ("bypassPermissions", "plan", "acceptEdits", "dontAsk", "manual", "auto")
@@ -335,6 +338,15 @@ def setup_monitor():
 
 
 class Handler(monitor.Handler):
+    def events(self, record, info):
+        self.input_reader = user_inputs.UserInputs(self.server.root, info)
+        super().events(record, info)
+
+    def event(self, name, value):
+        if name in ("snapshot", "update"):
+            value = dict(value, user_inputs=self.input_reader.snapshot())
+        super().event(name, value)
+
     def do_POST(self):
         expected=f"127.0.0.1:{self.server.server_port}"
         if self.headers.get("Host") != expected or self.headers.get("Origin") != "http://"+expected or self.headers.get("Content-Type") != "application/json":
@@ -433,7 +445,8 @@ def main(argv=None):
     elif a.action in ("status","result","logs"):
         result=refresh(root,a.id)[0]
         if a.action=="logs":
-            tail=monitor.Tail(result["output"]);tail.poll();result=tail.projection.snapshot()
+            inputs=user_inputs.UserInputs(root,result).snapshot()
+            tail=monitor.Tail(result["output"]);tail.poll();result=dict(tail.projection.snapshot(),user_inputs=inputs)
         if a.action=="result":
             result["model_matches"]=result.get("reported_model")==result["model"]
             result["requires_parent_review"]=True

@@ -37,7 +37,7 @@ The command returns immediately with a managed `id`, native `job_id`, `session_i
 
 ## Supervise
 
-Open `monitor_url` in the host's browser panel (in Codex, `open_in_codex` with a browser target, right placement). It shows replies, tool calls, edit previews and the selected turn's stop and resume controls. Replies arrive as Claude saves message blocks, not token by token.
+Open `monitor_url` in the host's browser panel (in Codex, `open_in_codex` with a browser target, right placement). It shows each turn's expandable, copyable user input, replies, tool calls, edit previews and stop/resume controls. Input comes from the native transcript; a saved dispatch prompt is explicitly labelled when transcript input is unavailable. Replies arrive as Claude saves message blocks, not token by token.
 
 ```bash
 python3 "$SKILL_DIR/scripts/claude_code.py" status TASK_ID

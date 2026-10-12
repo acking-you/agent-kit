@@ -297,4 +297,154 @@ class NativeTests(unittest.TestCase):
         self.assertEqual(cc.monitor.endpoint_info(self.root),{'port':server.server_port,'token':token})
 
 
+    def input_reader(self):
+        return cc.user_inputs.UserInputs(self.root, self.info)
+
+    def test_inputs_scope_native_text_and_attachments_without_tool_or_thinking_data(self):
+        marker='[Managed task turn '+self.ident+']'
+        self.info['marker']=marker
+        first=dict(self.user(marker+'\n  Original\n\nline  '),uuid='one',timestamp='2026-10-12T12:00:00Z')
+        follow={'type':'user','uuid':'two','message':{'content':[
+            {'type':'text','text':'Follow up <script>literal</script>'},
+            {'type':'image','source':{'data':'PRIVATE_IMAGE'}},
+            {'type':'document','source':{'url':'PRIVATE_URL'}},
+            {'type':'tool_result','content':'PRIVATE_TOOL','tool_use_id':'t'},
+        ]}}
+        self.write([self.user('older prompt'),self.assistant(),first,
+            dict(self.user('PRIVATE_META'),isMeta=True),
+            dict(self.user('PRIVATE_SUMMARY'),isCompactSummary=True),
+            {'type':'user','message':{'content':[{'type':'tool_result','content':marker+'\nNOT_INPUT'}]}},
+            follow,follow,
+            dict(self.user('Follow up <script>literal</script>'),uuid='three'),
+            self.user('[Managed task turn '+'b'*24+']\nOTHER_TURN'),
+            self.user('AFTER_OTHER')])
+        result=self.input_reader().snapshot()
+        self.assertEqual(result['source'],'transcript')
+        self.assertEqual([m['text'] for m in result['messages']],[
+            '  Original\n\nline  ','Follow up <script>literal</script>','Follow up <script>literal</script>'])
+        self.assertEqual(result['messages'][1]['attachments'],['image','document'])
+        for secret in ['PRIVATE','OTHER_TURN','AFTER_OTHER','NOT_INPUT','older prompt']:
+            self.assertNotIn(secret,json.dumps(result))
+
+    def test_input_incremental_partial_line_and_replaced_transcript(self):
+        reader=self.input_reader()
+        self.write([self.user('turn-marker\nfirst')])
+        self.assertEqual(reader.snapshot()['messages'][0]['text'],'first')
+        message=json.dumps(self.user('你好'),ensure_ascii=False).encode()+b'\n'
+        with self.transcript.open('ab') as f:f.write(message[:-4])
+        self.assertEqual(len(reader.snapshot()['messages']),1)
+        with self.transcript.open('ab') as f:f.write(message[-4:])
+        self.assertEqual(reader.snapshot()['messages'][-1]['text'],'你好')
+        self.assertEqual(len(reader.snapshot()['messages']),2)
+        self.write([self.user('turn-marker\nx')])
+        self.assertEqual([m['text'] for m in reader.snapshot()['messages']],['x'])
+        self.transcript.unlink()
+        self.assertTrue(reader.snapshot()['unavailable'])
+        self.write([self.user('turn-marker\nreplacement')])
+        self.assertEqual([m['text'] for m in reader.snapshot()['messages']],['replacement'])
+
+    def test_input_fallback_is_unconfirmed_and_recovers_late_hook(self):
+        (self.task/'brief.md').write_text('Saved dispatch\nkeep spacing  ')
+        self.hook.unlink()
+        reader=self.input_reader()
+        self.assertEqual(reader.snapshot()['source'],'brief')
+        self.write([self.user('turn-marker\nActual native input')])
+        cc.monitor.save(self.hook,{'transcript_path':str(self.transcript)})
+        result=reader.snapshot()
+        self.assertEqual(result['source'],'transcript')
+        self.assertEqual(result['messages'][0]['text'],'Actual native input')
+        (self.task/'brief.md').unlink();self.hook.unlink()
+        self.assertEqual(self.input_reader().snapshot()['source'],'unavailable')
+        (self.task/'brief.md').write_bytes(b'\xff')
+        self.assertEqual(self.input_reader().snapshot()['source'],'unavailable')
+
+    def test_inputs_keep_first_and_latest_with_explicit_display_limits(self):
+        self.write([self.user('turn-marker\n'+'x'*61000)]+[
+            dict(self.user(str(i)+'y'*10000),uuid=str(i)) for i in range(80)])
+        result=self.input_reader().snapshot()
+        self.assertTrue(result['messages'][0]['truncated'])
+        self.assertEqual(len(result['messages'][0]['text']),60000)
+        self.assertTrue(result['messages'][-1]['text'].startswith('79'))
+        self.assertGreater(result['omitted'],0)
+        self.assertLessEqual(sum(len(m['text']) for m in result['messages']),240000)
+        self.assertLessEqual(len(result['messages']),64)
+        self.write([self.user('turn-marker\nfirst')]+[
+            dict(self.user(str(i)),uuid=str(i)) for i in range(100)])
+        result=self.input_reader().snapshot()
+        self.assertEqual(len(result['messages']),64)
+        self.assertEqual(result['omitted'],37)
+
+    def test_inputs_do_not_treat_quoted_marker_as_a_new_turn(self):
+        self.write([self.user('turn-marker\nfirst'),
+            self.user('Quote:\n[Managed task turn '+'b'*24+']'),
+            self.user('after quotation')])
+        self.assertEqual(len(self.input_reader().snapshot()['messages']),3)
+
+    def test_old_terminal_logs_include_inputs_without_native_job_query(self):
+        self.write([self.user('turn-marker\nActual input'),self.assistant('done')])
+        self.info=self.settle(self.job('done'))
+        before=(self.root/'runs'/(self.ident+'.json')).read_bytes()
+        output=io.StringIO()
+        with patch.object(cc,'jobs',side_effect=AssertionError('No terminal job poll')),redirect_stdout(output):
+            self.assertEqual(cc.main(['logs',self.ident,'--state-dir',str(self.root)]),0)
+        result=json.loads(output.getvalue())
+        self.assertEqual(result['user_inputs']['messages'][0]['text'],'Actual input')
+        self.assertEqual(result['final']['text'],'done')
+        self.assertEqual((self.root/'runs'/(self.ident+'.json')).read_bytes(),before)
+
+    def test_sse_snapshot_includes_input_only_behind_registered_capability(self):
+        self.write([self.user('turn-marker\nActual input'),self.assistant('done')])
+        self.info=self.settle(self.job('done'))
+        server=cc.monitor.MonitorServer(self.root);server.RequestHandlerClass=cc.Handler
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        self.addCleanup(lambda:(server.shutdown(),server.server_close(),thread.join()))
+        origin=f'http://127.0.0.1:{server.server_port}'
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            urllib.request.urlopen(origin+'/bad/events/'+self.ident,timeout=3)
+        error.exception.close()
+        with urllib.request.urlopen(origin+'/'+server.token+'/events/'+self.ident,timeout=3) as response:
+            self.assertEqual(response.readline().decode().strip(),'event: snapshot')
+            result=json.loads(response.readline().decode().removeprefix('data: '))
+        self.assertEqual(result['user_inputs']['messages'][0]['text'],'Actual input')
+        self.assertEqual(result['run']['status'],'completed')
+        self.assertEqual(result['final']['text'],'done')
+        self.assertNotIn('PRIVATE_THOUGHT',json.dumps(result))
+
+
+    def test_sse_user_only_followup_updates_without_an_assistant_reply(self):
+        native_info=patch.object(cc.monitor,'run_info',side_effect=cc.monitor.read)
+        native_info.start();self.addCleanup(native_info.stop)
+        self.write([self.user('turn-marker\nInitial input')])
+        cc.collect(self.root,self.info,self.job())
+        server=cc.monitor.MonitorServer(self.root);server.RequestHandlerClass=cc.Handler
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        self.addCleanup(lambda:(server.stopping.set(),server.shutdown(),server.server_close(),thread.join()))
+        url=f'http://127.0.0.1:{server.server_port}/{server.token}/events/{self.ident}'
+        with urllib.request.urlopen(url,timeout=3) as response:
+            self.assertEqual(response.readline().decode().strip(),'event: snapshot')
+            first=json.loads(response.readline().decode().removeprefix('data: '))
+            response.readline()
+            self.assertEqual(len(first['user_inputs']['messages']),1)
+            with self.transcript.open('a') as stream:
+                stream.write(json.dumps(dict(self.user('Native follow-up'),uuid='next'))+'\n')
+            cc.collect(self.root,self.info,self.job())
+            self.assertEqual(response.readline().decode().strip(),'event: update')
+            result=json.loads(response.readline().decode().removeprefix('data: '))
+        self.assertEqual([m['text'] for m in result['user_inputs']['messages']],['Initial input','Native follow-up'])
+        self.assertEqual(result['cards'],[])
+        self.assertEqual(result['run']['status'],'running')
+
+
+    def test_native_local_command_and_stdout_are_not_model_input(self):
+        self.write([self.user('turn-marker\nActual prompt'),
+            dict(self.user('<local-command-caveat>Not sent as a request</local-command-caveat>'),isMeta=True,promptId='local'),
+            dict(self.user('<command-name>/exit</command-name>'),promptId='local'),
+            dict(self.user('<local-command-stdout>(no content)</local-command-stdout>'),promptId='local'),
+            dict(self.user('Explain this: <command-name>/exit</command-name>'),promptId='human'),
+        ])
+        result=self.input_reader().snapshot()
+        self.assertEqual([m['text'] for m in result['messages']],[
+            'Actual prompt','Explain this: <command-name>/exit</command-name>'])
+
+
 if __name__=='__main__':unittest.main()
