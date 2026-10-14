@@ -21,9 +21,13 @@ Claude Code keeps its own login and workspace trust. If a new workspace needs tr
 
 An explicit user choice wins. Otherwise use the latest, strongest Claude model available through the user's provider, checked against current [vendor guidance](https://platform.claude.com/docs/en/models/overview). Pass the provider's exact model ID and confirm `reported_model` matches; gateways may map aliases differently. Never silently downgrade. Effort defaults to `high`. Do not impose a turn cap or deadline.
 
+## Choose a session
+
+Use `resume` for the same problem's next step: addressing review findings, fixing a failed check, or continuing unfinished work that depends on prior decisions. Start a new `run` for an independent objective, a separate issue, or an independent review. Sharing a repository or parent task is not enough reason to reuse a conversation. Carry over only the relevant contract or evidence into a new session; do not bundle unrelated work into an ever-growing resume chain. Separate sessions may run concurrently only when their edits and shared resources do not conflict.
+
 ## Brief and run
 
-The session does not see this chat. Write a self-contained brief: goal, evidence, user constraints, repository instructions, scope (paths and actions in bounds), acceptance criteria, and which validation and delivery steps you keep. Prefer an isolated workspace for edits. Store briefs and checkpoints outside repositories and temporary directories.
+A new session does not see this chat. Its first brief should supply the goal, relevant evidence, scope and constraints, acceptance criteria, and division of work. Link repository instructions and durable evidence instead of copying them wholesale. Prefer an isolated workspace for edits unless the user specifies otherwise. Store briefs and checkpoints outside repositories and temporary directories.
 
 ```bash
 python3 "$SKILL_DIR/scripts/claude_code.py" run \
@@ -56,7 +60,11 @@ python3 "$SKILL_DIR/scripts/claude_code.py" stop TASK_ID
 python3 "$SKILL_DIR/scripts/claude_code.py" resume TASK_ID --prompt-file /absolute/task/follow-up.md
 ```
 
-Stop waits until the native job confirms it has ended. It does not roll back files, so inspect edits before continuing. Resume the latest turn only after it has ended and settled; never overlap turns. A resume keeps the recorded model, effort, tools and permissions unless you pass `--permission-mode` or `--tools`. Claude Code may continue under a new session UUID; the helper records the source, so verify retained context. Start a fresh `run` for an independent opinion. Recovery steps: [native sessions](references/native-sessions.md#recovery).
+Stop waits until the native job confirms it has ended. It does not roll back files, so inspect edits before continuing. Resume the latest turn only after it has ended and settled; never overlap turns. A resume keeps the recorded model, effort, tools and permissions unless you pass `--permission-mode` or `--tools`.
+
+**Resume with a short delta.** The saved conversation already contains its brief and prior work. Send only the next outcome, new findings or failures, and acceptance criteria that changed or apply to this step. Do not repeat unchanged background, paths, model settings, constraints or completed steps. Explicitly replace a superseded instruction when needed; link longer evidence for selective reading. Let Claude choose the implementation unless a concrete finding requires a specific change.
+
+Claude Code may continue under a new session UUID; the helper records the source, so verify retained context. A new UUID alone does not mean context was lost. If output shows a specific gap, supply only the missing context. Recovery steps: [native sessions](references/native-sessions.md#recovery).
 
 ## Accept
 
