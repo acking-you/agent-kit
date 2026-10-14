@@ -27,7 +27,7 @@ Use `resume` for the same problem's next step: addressing review findings, fixin
 
 ## Brief and run
 
-A new session does not see this chat. Its first brief should supply the goal, relevant evidence, scope and constraints, acceptance criteria, and division of work. Link repository instructions and durable evidence instead of copying them wholesale. Prefer an isolated workspace for edits unless the user specifies otherwise. Store briefs and checkpoints outside repositories and temporary directories.
+A new session does not see this chat. Its first brief should supply the goal, relevant evidence, scope and constraints, acceptance criteria, and division of work. Link repository instructions and durable evidence when the selected tools can read them. If tools cannot access those resources (for example `--tools ''`), include the relevant instructions and evidence in the brief; a path alone supplies no context. Prefer an isolated workspace for edits unless the user specifies otherwise. Store briefs and checkpoints outside repositories and temporary directories.
 
 ```bash
 python3 "$SKILL_DIR/scripts/claude_code.py" run \
