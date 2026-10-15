@@ -47,7 +47,7 @@ Display limits are explicit: 60,000 characters per message, 64 messages and 240,
 
 1. Read the managed record and `claude agents --json --all`. Missing inventory or a missing host handle does not prove completion. A blocked task needs its native prompt answered, not another overlapping turn.
 2. To stop work, use `stop` with the recorded job ID. Confirm the job is no longer busy and inspect files and child processes before resuming. The session-local setting disables native background exit handoff, so a stop does not intentionally leave delegated child work running.
-3. Resume from the latest managed turn with a fresh brief. The helper keeps the model, effort, tools and permissions, writes a new log, and records the source UUID. Claude Code may create a copy; the helper records the actual resulting UUID rather than assuming it matches.
+3. Resume from the latest managed turn with a short follow-up describing only what is new (see **Resume with a short delta** in [SKILL.md](../SKILL.md)). The helper keeps the model, effort, tools and permissions, writes a new log, and records the source UUID. Claude Code may create a copy; the helper records the actual resulting UUID rather than assuming it matches.
 4. Check the resumed output and artifacts for the expected context. Terminal logs settle before acceptance and are reconciled again if the transcript grows. A native `done` state ends a turn; it does not accept the work or finish delivery.
 5. If the panel is unavailable, `status`, `logs` and `result` read directly from the durable transcript. `monitor` starts a fresh observer without resending the prompt.
 
