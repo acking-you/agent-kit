@@ -42,7 +42,7 @@ Each folder holds dated versions named `YYYY-MM-DD-NAME.md`; later versions from
 
 ### Claude global instructions
 
-[Versions](prompts/claude-global/). Engineering preferences for Claude Code across projects, for the user-level `~/.claude/CLAUDE.md` ([Claude Code memory docs](https://code.claude.com/docs/en/memory#choose-where-to-put-claudemd-files)).
+[Versions](prompts/claude-global/). Engineering preferences for Claude Code across projects, for the user-level `~/.claude/CLAUDE.md` ([Claude Code memory docs](https://code.claude.com/docs/en/memory#choose-where-to-put-claudemd-files)): whole-flow refactoring over local patches and deliberate, minimal testing. The latest version is portable and matches the Codex one.
 
 ```text
 Merge the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/claude-global into my global Claude Code instructions at ~/.claude/CLAUDE.md.
@@ -50,7 +50,7 @@ Merge the latest version from https://github.com/acking-you/agent-kit/tree/main/
 
 ### Codex global instructions
 
-[Versions](prompts/codex-global/). The first version is a snapshot of my local `~/.codex/AGENTS.md`, including macOS tooling, TSearch SSH and long-running-task preferences, so some rules are specific to my environment. See the [Codex AGENTS.md docs](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+[Versions](prompts/codex-global/). The same portable engineering preferences as the Claude version; older snapshots also contain rules specific to my environment. See the [Codex AGENTS.md docs](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
 
 ```text
 Merge the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/codex-global into my global Codex instructions at ~/.codex/AGENTS.md.
