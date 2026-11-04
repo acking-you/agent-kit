@@ -42,7 +42,7 @@ Each folder holds dated versions named `YYYY-MM-DD-NAME.md`; later versions from
 
 ### Claude global instructions
 
-[Versions](prompts/claude-global/). Engineering preferences for Claude Code across projects, for the user-level `~/.claude/CLAUDE.md` ([Claude Code memory docs](https://code.claude.com/docs/en/memory#choose-where-to-put-claudemd-files)): whole-flow refactoring over local patches and deliberate, minimal testing. The latest version is portable and matches the Codex one.
+[Versions](prompts/claude-global/). Engineering preferences for Claude Code across projects, for the user-level `~/.claude/CLAUDE.md` ([Claude Code memory docs](https://code.claude.com/docs/en/memory#choose-where-to-put-claudemd-files)): whole-flow refactoring over local patches, deliberate minimal testing, and moving long, diverged tasks into new sessions. The latest version is portable and matches the Codex one.
 
 ```text
 Merge the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/claude-global into my global Claude Code instructions at ~/.claude/CLAUDE.md.
