@@ -118,6 +118,18 @@ class ProjectionTests(unittest.TestCase):
             self.assertTrue(tail.poll())
             self.assertEqual([c['text'] for c in tail.projection.cards.values()],['new'])
 
+    def test_recreated_log_is_read_from_start(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp)/'log'; path.write_text(json.dumps(message('m',{'type':'text','text':'old'}))+'\n')
+            tail = monitor.Tail(path); tail.poll()
+            path.unlink()
+            self.assertFalse(tail.poll())
+            self.assertEqual([c['text'] for c in tail.projection.cards.values()],['old'])
+            # Longer than the old offset, so resuming at that offset would skip the new card.
+            path.write_text(json.dumps(message('n',{'type':'text','text':'new '+'x'*200}))+'\n')
+            self.assertTrue(tail.poll())
+            self.assertEqual([c['text'] for c in tail.projection.cards.values()],['new '+'x'*200])
+
     def test_dead_or_stale_runner_is_interrupted(self):
         with tempfile.TemporaryDirectory() as tmp:
             p=Path(tmp)/'run.json'

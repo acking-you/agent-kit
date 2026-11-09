@@ -297,7 +297,7 @@ class Tail:
             with self.path.open("rb") as stream:
                 stat = os.fstat(stream.fileno())
                 identity = (stat.st_dev, stat.st_ino)
-                if self.identity not in (None, identity) or stat.st_size < self.offset:
+                if identity != self.identity or stat.st_size < self.offset:
                     self.offset = 0
                     self.projection = Projection()
                     reset = True
@@ -313,7 +313,9 @@ class Tail:
                     except (ValueError, TypeError, AttributeError):
                         continue
         except FileNotFoundError:
-            pass
+            # Keep the shown cards, but read a returning log from its start:
+            # a recreated log can reuse the old inode.
+            self.identity = None
         return reset
 
 
