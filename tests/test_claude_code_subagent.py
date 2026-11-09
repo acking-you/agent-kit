@@ -343,6 +343,17 @@ class NativeTests(unittest.TestCase):
         self.write([self.user('turn-marker\nreplacement')])
         self.assertEqual([m['text'] for m in reader.snapshot()['messages']],['replacement'])
 
+    def test_monitor_tail_rereads_recreated_log(self):
+        result=lambda text:json.dumps({'type':'result','subtype':'success','result':text})+'\n'
+        self.log.write_text(result('old'))
+        tail=cc.monitor.Tail(str(self.log));tail.poll()
+        self.assertEqual(tail.projection.final['text'],'old')
+        self.log.unlink()
+        self.assertFalse(tail.poll());self.assertEqual(tail.projection.final['text'],'old')
+        # Longer than the old offset, so resuming at that offset would skip the new result.
+        self.log.write_text(result('replacement')+json.dumps(self.assistant('padding'))+'\n')
+        self.assertTrue(tail.poll());self.assertEqual(tail.projection.final['text'],'replacement')
+
     def test_input_fallback_is_unconfirmed_and_recovers_late_hook(self):
         (self.task/'brief.md').write_text('Saved dispatch\nkeep spacing  ')
         self.hook.unlink()

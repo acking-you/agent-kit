@@ -123,7 +123,9 @@ class UserInputs:
                             self.messages.pop(1)
                             self.omitted += 1
             except OSError:
-                pass
+                # Keep the shown input, but read a returning file from its start:
+                # a recreated transcript can reuse the old inode.
+                self.identity = None
         if self.started:
             return {"source": "transcript", "messages": list(self.messages),
                     "omitted": self.omitted, "unavailable": not readable}
