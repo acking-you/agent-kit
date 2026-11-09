@@ -13,6 +13,7 @@ README.md holds copyable installation requests for agents: usually one sentence 
 - Claude Code runtime: `python3 -m unittest discover -s tests -p 'test_claude_code_subagent.py' -q`, `node --test tests/claude-code-*.test.cjs`, and the shared monitor suites against its assets: `MONITOR_TEST_ASSETS=$PWD/skills/claude-code-subagent/assets/monitor WORKBUDDY_TEST_PREFERENCES=$PWD/skills/claude-code-subagent/assets/monitor/preferences.js node --test tests/workbuddy-ui.test.cjs tests/workbuddy-preferences.test.cjs`.
 - WorkBuddy runtime: `python3 -m unittest discover -s tests -p 'test_workbuddy*.py' -q` and `node --test tests/workbuddy-*.test.cjs`.
 - DOM tests need development-only `jsdom` 26.1.0 installed in a temporary directory, with `NODE_PATH` pointing at its `node_modules`. Native IPC and HTTP tests need local socket access. The shipped skills need no npm install.
+- Language guides: have agents solve a few briefly worded tasks with and without the guide and review the results blind. Keep a rule only if it changes the result, and narrow or cut any rule that causes unrequested work.
 - Validate changed skills with the host's skill validator and a local install. `grill-me` keeps both Claude Code's `disable-model-invocation` and Codex's `allow_implicit_invocation: false`; if a validator rejects one, check it separately instead of removing it. Prose-only edits need review, not tests.
 
 Use conventional commit subjects of at most 50 characters. PRs describe final behavior, validation and compatibility limits.

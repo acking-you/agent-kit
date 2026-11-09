@@ -58,7 +58,7 @@ Overwrite my global Codex instructions at ~/.codex/AGENTS.md with the latest ver
 
 ### Rust engineering guide
 
-[Versions](prompts/language-guides/rust/). Rust coding rules distilled from [xai-org/grok-build](https://github.com/xai-org/grok-build), a production workspace of about 100 crates. It covers crate boundaries, zero-cost type design, errors, async cancellation and resource cleanup, lint-enforced safety and targeted tests. It loads only for Rust work and stays out of the global instructions; guides for other languages go in sibling folders under [`prompts/language-guides`](prompts/language-guides/).
+[Versions](prompts/language-guides/rust/). Rust coding rules distilled from [xai-org/grok-build](https://github.com/xai-org/grok-build), a production workspace of about 100 crates, then pruned by blind comparisons of agent-written code with and without the guide. What remains are the rules that changed the result: crate boundaries, validated types and static dispatch, error design, cancellation and bounded buffers, process supervision and wire compatibility. It also tells the agent not to add lint configuration, dependencies or hardening nobody asked for. It loads only for Rust work and stays out of the global instructions; guides for other languages go in sibling folders under [`prompts/language-guides`](prompts/language-guides/).
 
 For Claude Code, as a user rule that loads when Claude reads or edits Rust files ([path-specific rules](https://code.claude.com/docs/en/memory#path-specific-rules)):
 
