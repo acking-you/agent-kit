@@ -38,7 +38,7 @@ Install the skill at https://github.com/acking-you/agent-kit/tree/main/skills/gr
 
 ## Prompts
 
-Each folder holds dated versions named `YYYY-MM-DD-NAME.md`; later versions from the same day add `-v02`, `-v03` and so on. The latest is the newest date, then the highest version.
+Each collection folder holds dated versions named `YYYY-MM-DD-NAME.md`; later versions from the same day add `-v02`, `-v03` and so on. The latest is the newest date, then the highest version.
 
 ### Claude global instructions
 
@@ -54,6 +54,22 @@ Overwrite my global Claude Code instructions at ~/.claude/CLAUDE.md with the lat
 
 ```text
 Overwrite my global Codex instructions at ~/.codex/AGENTS.md with the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/codex-global.
+```
+
+### Rust engineering guide
+
+[Versions](prompts/language-guides/rust/). Rust coding rules distilled from [xai-org/grok-build](https://github.com/xai-org/grok-build), a production workspace of about 100 crates. It covers crate boundaries, zero-cost type design, errors, async cancellation and resource cleanup, lint-enforced safety and targeted tests. It loads only for Rust work and stays out of the global instructions. More languages will get their own folders under [`prompts/language-guides`](prompts/language-guides/).
+
+For Claude Code, as a user rule that loads when Claude reads or edits Rust files ([path-specific rules](https://code.claude.com/docs/en/memory#path-specific-rules)):
+
+```text
+Install the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/language-guides/rust as ~/.claude/rules/rust.md, with `paths` frontmatter for `**/*.rs` and `**/Cargo.toml`.
+```
+
+For Codex, in a Rust project:
+
+```text
+Add the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/language-guides/rust to this project's AGENTS.md as its Rust section, replacing any earlier copy of the guide.
 ```
 
 ### Translation task prompt
