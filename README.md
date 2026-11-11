@@ -72,6 +72,22 @@ For Codex, in a Rust project:
 Add the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/language-guides/rust to this project's AGENTS.md as its Rust section, replacing any earlier copy of the guide.
 ```
 
+### C++ engineering guide
+
+[Versions](prompts/language-guides/cpp/). Modern C++ rules (C++23, with pointers to C++26) distilled from [ClickHouse](https://github.com/ClickHouse/ClickHouse) and [NVIDIA/stdexec](https://github.com/NVIDIA/stdexec) and restated in standard-library terms instead of either project's in-house frameworks. Like the Rust guide, it was pruned by blind comparisons of agent-written code with and without it, here built and tested under sanitizers, and its technical claims were compiled with GCC and Clang. What remains are the rules that changed the result: target boundaries, validated types and generic code that keeps `T`'s properties, view and coroutine lifetimes, error design, thread ownership, stop tokens and deadlines, input limits, atomic file replacement and wire compatibility. It also tells the agent not to add build or lint configuration, dependencies or hardening nobody asked for, and it loads only for C++ work.
+
+For Claude Code, as a user rule that loads when Claude reads or edits C++ files:
+
+```text
+Install the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/language-guides/cpp as ~/.claude/rules/cpp.md, with `paths` frontmatter for `**/*.{cpp,cc,cxx,hpp,hh,hxx,h,ixx,cppm}` and `**/CMakeLists.txt`.
+```
+
+For Codex, in a C++ project:
+
+```text
+Add the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/language-guides/cpp to this project's AGENTS.md as its C++ section, replacing any earlier copy of the guide.
+```
+
 ### Translation task prompt
 
 [Versions](prompts/translation/). A reusable prompt for a dedicated translation chat or a translation project's instructions. It preserves technical meaning, code and structured formats; it is not a global coding-agent prompt.
