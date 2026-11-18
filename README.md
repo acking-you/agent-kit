@@ -42,7 +42,7 @@ Each collection folder holds dated versions named `YYYY-MM-DD-NAME.md`; later ve
 
 ### Claude global instructions
 
-[Versions](prompts/claude-global/). Engineering preferences for Claude Code across projects, for the user-level `~/.claude/CLAUDE.md` ([Claude Code memory docs](https://code.claude.com/docs/en/memory#choose-where-to-put-claudemd-files)): root-cause refactoring over local patches, minimal testing, acting on its own judgment instead of asking, and moving long, diverged tasks into new sessions. The latest version is portable and matches the Codex one.
+[Versions](prompts/claude-global/). Engineering preferences for Claude Code across projects, for the user-level `~/.claude/CLAUDE.md` ([Claude Code memory docs](https://code.claude.com/docs/en/memory#choose-where-to-put-claudemd-files)): root-cause refactoring over local patches, minimal testing, acting on its own judgment instead of asking, and moving long, diverged tasks into new sessions. The latest version is portable; the Codex version shares its preferences and adds GPT-6.2 tuning.
 
 ```text
 Overwrite my global Claude Code instructions at ~/.claude/CLAUDE.md with the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/claude-global.
@@ -50,7 +50,7 @@ Overwrite my global Claude Code instructions at ~/.claude/CLAUDE.md with the lat
 
 ### Codex global instructions
 
-[Versions](prompts/codex-global/). The same portable engineering preferences as the Claude version; older snapshots also contain rules specific to my environment. See the [Codex AGENTS.md docs](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
+[Versions](prompts/codex-global/). The Claude version's portable engineering preferences, tuned for GPT-6.2 with the scenario prompts from OpenAI's [Using GPT-6.2](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-6.2-astra) guide: self-contained final answers without reasoning shorthand, finishing work instead of stopping at a plan, readable code that reuses existing logic, and leaner interface copy. Older snapshots also contain rules specific to my environment. See the [Codex AGENTS.md docs](https://learn.chatgpt.com/docs/agent-configuration/agents-md).
 
 ```text
 Overwrite my global Codex instructions at ~/.codex/AGENTS.md with the latest version from https://github.com/acking-you/agent-kit/tree/main/prompts/codex-global.
